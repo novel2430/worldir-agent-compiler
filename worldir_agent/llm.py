@@ -107,6 +107,10 @@ class HTTPJSONLLM:
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
         }
+        if self.config.thinking is not None:
+            payload["thinking"] = {
+                "type": "enabled" if self.config.thinking else "disabled"
+            }
         data = self._post(
             url,
             payload,

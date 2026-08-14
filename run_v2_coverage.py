@@ -694,6 +694,7 @@ def main() -> int:
             "model": config.llm.model,
             "temperature": config.llm.temperature,
             "max_tokens": config.llm.max_tokens,
+            "thinking": config.llm.thinking,
         },
         "workflow": {
             "use_planner_checker": config.workflow.use_planner_checker,

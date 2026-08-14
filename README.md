@@ -469,6 +469,28 @@ python -m unittest discover -s tests -v
 - explicit bypass workflow
 - expressibility → IR GAP 会在 Editor 前停止
 
+### OneAPI 真实模型配置
+
+内部 OpenAI-compatible 入口使用 `https://oneapi.qunhequnhe.com/v1`。首次运行：
+
+```bash
+./run_oneapi_smoke.command
+```
+
+`[llm]` 中的 `thinking` 控制 OpenAI-compatible 请求的思考模式：
+
+```toml
+thinking = false # true 开启，false 关闭；删除此项则使用模型/网关默认值
+```
+
+首次运行时，终端会隐藏读取 API Key，并保存到权限为 `600`、已被 Git 忽略的 `config/oneapi.env`。再次运行测试脚本会自动复用该 Key，不再询问。其他命令可这样复用：
+
+```bash
+source config/oneapi.env
+uv run worldir-agent --config config/config.oneapi.deepseek-v4-flash.toml --prompt '...'
+uv run worldir-agent --config config/config.oneapi.gpt-5.6-sol.toml --prompt '...'
+```
+
 ---
 
 ## 13. 当前刻意没有引入的东西

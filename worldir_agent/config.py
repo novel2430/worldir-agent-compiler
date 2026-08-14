@@ -15,6 +15,11 @@ class LLMConfig:
     max_tokens: int = 4096
     timeout_seconds: int = 90
     anthropic_version: str = "2023-06-01"
+    thinking: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.thinking is not None and not isinstance(self.thinking, bool):
+            raise ValueError("llm.thinking must be true, false, or omitted")
 
 
 @dataclass(slots=True)
