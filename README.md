@@ -38,7 +38,36 @@ Router
 
 重点不是把它做成一个完整 Agent Framework，而是**方便反复改 Prompt、改 IR、换模型、跑 Case，然后看每个 pass 到底发生什么**。
 
-项目目前只有 Python 标准库依赖。
+Compiler core 保持轻量；Server V0 另外使用 FastAPI、Pydantic v2 和 Uvicorn。
+
+---
+
+## Server V0
+
+Server V0 是本地 sidecar HTTP 服务，按 `docs/server_v0/LLM_COMPILER_SERVER_V0_DESIGN.md` 暴露：
+
+```text
+POST /v1/compile
+GET  /health
+GET  /info
+```
+
+准备配置并启动：
+
+```bash
+cp config/config.example.toml config/config.toml
+export DEEPSEEK_API_KEY='你的 key'
+uv sync
+uv run worldir-agent-server --config config/config.toml
+```
+
+也可以直接运行模块：
+
+```bash
+uv run python -m worldir_agent.server --config config/config.toml
+```
+
+服务默认监听 `127.0.0.1:8787`。Server 使用 World IR V2、Runtime Context V1 和 Compile Result V1；它不保存 world session，调用方必须在每次编译时传入 Current World IR 与 Runtime Context。
 
 ---
 
@@ -175,13 +204,16 @@ parsed_response
 
 ```text
 prompts/
+├── common/
+│   └── runtime_semantics.md
 ├── initial_translator.md
 ├── router.md
 ├── planner.md
 ├── planner_checker.md
 ├── expressibility.md
 ├── editor.md
-└── ir_validator.md
+├── ir_validator.md
+└── json_repair.md
 ```
 
 Workflow code 只负责：
@@ -436,6 +468,28 @@ python -m unittest discover -s tests -v
 - broken reference 会被抓出来
 - explicit bypass workflow
 - expressibility → IR GAP 会在 Editor 前停止
+
+### OneAPI 真实模型配置
+
+内部 OpenAI-compatible 入口使用 `https://oneapi.qunhequnhe.com/v1`。首次运行：
+
+```bash
+./run_oneapi_smoke.command
+```
+
+`[llm]` 中的 `thinking` 控制 OpenAI-compatible 请求的思考模式：
+
+```toml
+thinking = false # true 开启，false 关闭；删除此项则使用模型/网关默认值
+```
+
+首次运行时，终端会隐藏读取 API Key，并保存到权限为 `600`、已被 Git 忽略的 `config/oneapi.env`。再次运行测试脚本会自动复用该 Key，不再询问。其他命令可这样复用：
+
+```bash
+source config/oneapi.env
+uv run worldir-agent --config config/config.oneapi.deepseek-v4-flash.toml --prompt '...'
+uv run worldir-agent --config config/config.oneapi.gpt-5.6-sol.toml --prompt '...'
+```
 
 ---
 

@@ -4,17 +4,16 @@ port = 8787
 log_level = "info"
 
 [llm]
-provider = "anthropic"
-base_url = "https://api.anthropic.com"
-model = "YOUR_CLAUDE_MODEL"
-api_key_env = "ANTHROPIC_API_KEY"
+provider = "openai_compatible"
+base_url = "https://oneapi.qunhequnhe.com/v1"
+model = "deepseek-v4-flash"
+api_key_env = "ONEAPI_API_KEY"
 temperature = 0.0
 max_tokens = 32768
-timeout_seconds = 90
-anthropic_version = "2023-06-01"
+thinking = false
+timeout_seconds = 120
 
 [workflow]
-# Optional experimental semantic review loop. Off by default.
 use_planner_checker = false
 planner_max_attempts = 3
 editor_max_attempts = 3

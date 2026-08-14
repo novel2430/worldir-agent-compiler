@@ -388,6 +388,12 @@ Root shape:
 
 Formal schema: `schemas/runtime_context_v1.schema.json`.
 
+V1 invariants:
+
+- Every `facts[].id` MUST be unique within one `RuntimeContext`. Bindings and fact operations address Runtime Facts by this ID, so duplicate IDs are invalid.
+- `location.inside` and `location.near`, when present, are semantic references to object IDs in the request's `current_ir` (`regions`, `networks`, `entities`, or `distributions`). V0 does not use Runtime Fact IDs in these fields.
+- `object_state.target` is different: it identifies a persistent Godot/runtime interactable and does NOT need to be a World IR object ID.
+
 ### 8.1 `added_object`
 
 Represents a meaningful object added by the player.
@@ -437,7 +443,7 @@ Represents a persistent interaction state.
 }
 ```
 
-The state vocabulary belongs to the relevant interactable/backend system. It is not added to World IR V2.
+The state vocabulary belongs to the relevant interactable/backend system. It is not added to World IR V2. The `target` field is a persistent runtime/interactable identifier (for example `church_door`), not a World IR reference, and therefore does not need to appear in `current_ir`.
 
 ### 8.4 `marked_area`
 

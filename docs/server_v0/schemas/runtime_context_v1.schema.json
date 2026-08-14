@@ -9,6 +9,7 @@
     "version": {"const": "1"},
     "facts": {
       "type": "array",
+      "description": "Runtime Fact ids MUST be unique within this array. This cross-item invariant is enforced by the server contract model.",
       "items": {"$ref": "#/$defs/runtime_fact"}
     }
   },
@@ -26,8 +27,16 @@
       "minProperties": 1,
       "properties": {
         "anchor": {"$ref": "#/$defs/anchor"},
-        "inside": {"type": "string", "minLength": 1},
-        "near": {"type": "string", "minLength": 1}
+        "inside": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Semantic reference to an object id in the request current_ir. V0 does not use Runtime Fact ids here."
+        },
+        "near": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Semantic reference to an object id in the request current_ir. V0 does not use Runtime Fact ids here."
+        }
       }
     },
     "added_object": {
@@ -59,7 +68,11 @@
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "kind": {"const": "object_state"},
-        "target": {"type": "string", "minLength": 1},
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Persistent Godot/runtime interactable identifier; it does not need to be a World IR object id."
+        },
         "state": {"type": "string", "minLength": 1}
       }
     },
