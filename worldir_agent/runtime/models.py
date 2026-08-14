@@ -91,6 +91,19 @@ class RuntimeContext(StrictContractModel):
     version: Literal["1"]
     facts: list[RuntimeFact]
 
+    @model_validator(mode="after")
+    def require_unique_fact_ids(self) -> RuntimeContext:
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for fact in self.facts:
+            if fact.id in seen:
+                duplicates.add(fact.id)
+            seen.add(fact.id)
+        if duplicates:
+            duplicate_list = ", ".join(sorted(duplicates))
+            raise ValueError(f"runtime fact ids must be unique: {duplicate_list}")
+        return self
+
     @property
     def fact_ids(self) -> set[str]:
         return {fact.id for fact in self.facts}

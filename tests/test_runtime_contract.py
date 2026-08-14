@@ -47,6 +47,25 @@ class RuntimeContextContractTests(unittest.TestCase):
             "clearing_01",
         })
 
+    def test_runtime_context_rejects_duplicate_fact_ids(self):
+        with self.assertRaises(ValidationError):
+            RuntimeContext.model_validate({
+                "version": "1",
+                "facts": [
+                    {
+                        "id": "duplicate_01",
+                        "kind": "object_state",
+                        "target": "church_door",
+                        "state": "open",
+                    },
+                    {
+                        "id": "duplicate_01",
+                        "kind": "added_object",
+                        "object_type": "campfire",
+                    },
+                ],
+            })
+
     def test_runtime_context_rejects_protocol_extensions(self):
         with self.assertRaises(ValidationError):
             RuntimeContext.model_validate({
