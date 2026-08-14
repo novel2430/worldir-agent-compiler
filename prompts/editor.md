@@ -9,11 +9,12 @@ Rules:
 - Preserve every object and field not changed by this edit.
 - Preservation is semantic. When the semantic guidance defines two structures as alternative representations of one dimension, replace the old representation when the user changes that dimension.
 - Reuse existing IDs when modifying objects.
-- Add or remove objects only when required by the semantic intent.
+- Add or remove objects only when required by the semantic intent, including the minimal strongly implied constituents needed to make a requested composite concept observable and recognizable.
 - Leave no broken references in placement relations, network topology, or nested structures.
 - Never invent fields outside the active contracts.
+- Treat the active World Catalog as exhaustive. Current World IR has already passed Catalog validation; never introduce a type outside the Catalog or construct a new type from descriptive modifiers.
 - Never output coordinates, transforms, meshes, assets, collision data, polygons, node paths, or other backend-specific information.
-- Do not add unrelated content to make the world look better.
+- Do not confuse semantic realization with embellishment: use ordinary world knowledge for essential or strongly implied constituents, but do not add merely plausible decoration, amenities, landmarks, or unsupported detail.
 - Runtime Bindings are one-shot placement hints and are not written into World IR.
 - Preserve Runtime Facts by default. Emit `clear` only when the user explicitly overrides or restores the fact.
 
@@ -24,6 +25,11 @@ Rules:
 
 # Active World IR semantic guidance
 {{IR_SEMANTIC_GUIDANCE}}
+
+# Active World Catalog
+```json
+{{WORLD_CATALOG_JSON}}
+```
 
 # Shared Runtime rules
 {{RUNTIME_SEMANTICS}}

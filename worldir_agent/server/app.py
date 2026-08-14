@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import asdict, replace
+from hashlib import sha256
+import json
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
@@ -56,6 +59,8 @@ def build_compiler(config: AppConfig) -> WorldCompiler:
     spec = IRSpec(config.ir.spec)
     if spec.data.get("version") != "World IR V2":
         raise ValueError("Configured IR spec is not World IR V2")
+    if spec.catalog is None or spec.catalog.version != "World Catalog V1":
+        raise ValueError("Server V0 requires World Catalog version 1")
 
     configured_semantics = Path(config.ir.semantics).resolve()
     declared_semantics = (
@@ -70,18 +75,43 @@ def build_compiler(config: AppConfig) -> WorldCompiler:
     runtime_semantics = Path(config.prompts.runtime_semantics).read_text(
         encoding="utf-8"
     ).strip()
-    llm = HTTPJSONLLM(config.llm)
+    generator_llm = HTTPJSONLLM(config.llm)
+    judge_config = replace(config.llm, temperature=0.0)
+    judge_llm = HTTPJSONLLM(judge_config)
 
     def workflow_factory() -> WorldIRWorkflow:
         return WorldIRWorkflow(
-            llm=llm,
+            llm=generator_llm,
+            judge_llm=judge_llm,
             prompts=prompt_store,
             spec=spec,
             config=config.workflow,
             runtime_semantics=runtime_semantics,
         )
 
-    return WorldCompiler(workflow_factory)
+    fingerprint_payload = {
+        "format": 1,
+        "generator_llm": asdict(config.llm),
+        "judge_llm": asdict(judge_config),
+        "workflow": asdict(config.workflow),
+        "ir": spec.data,
+        "ir_semantic_guidance": spec.semantic_guidance,
+        "world_catalog": spec.catalog.data if spec.catalog is not None else None,
+        "runtime_context_version": config.runtime.context_version,
+        "runtime_semantics": runtime_semantics,
+        "prompts": prompt_store.snapshot(),
+    }
+    fingerprint = sha256(
+        json.dumps(
+            fingerprint_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    return WorldCompiler(workflow_factory, fingerprint=fingerprint)
 
 
 def create_app(
@@ -91,6 +121,7 @@ def create_app(
     compile_cache: CompileCache | None = None,
 ) -> FastAPI:
     app = FastAPI(title="WorldIR LLM Compiler Server", version="0.3.0")
+    compiler_fingerprint = getattr(compiler, "fingerprint", "unspecified")
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(
@@ -132,6 +163,7 @@ def create_app(
                             else "invalid_runtime_context"
                         ),
                     },
+                    compiler_fingerprint=compiler_fingerprint,
                 )
             except OSError:
                 pass
@@ -172,7 +204,11 @@ def create_app(
         response: CompileResultOk | CompileResultIRGap | None = None
 
         if compile_cache is not None:
-            cached = compile_cache.get(request_payload, request_id=request_id)
+            cached = compile_cache.get(
+                request_payload,
+                request_id=request_id,
+                compiler_fingerprint=compiler_fingerprint,
+            )
             if cached is not None:
                 _write_trace(
                     trace_writer,
@@ -180,6 +216,7 @@ def create_app(
                     request=request_payload,
                     trace=None,
                     result=cached.model_dump(mode="json", exclude_none=True),
+                    compiler_fingerprint=compiler_fingerprint,
                 )
                 return cached
 
@@ -192,26 +229,52 @@ def create_app(
             trace = workflow_result.trace
             response = _to_compile_result(request_id, workflow_result)
             if compile_cache is not None:
-                compile_cache.put(request_payload, response)
+                compile_cache.put(
+                    request_payload,
+                    response,
+                    compiler_fingerprint=compiler_fingerprint,
+                )
             _write_trace(
                 trace_writer,
                 request_id=request_id,
                 request=request_payload,
                 trace=trace,
                 result=response.model_dump(mode="json", exclude_none=True),
+                compiler_fingerprint=compiler_fingerprint,
             )
             return response
         except CompilerInputError as exc:
             trace = exc.trace
-            _write_trace_error(trace_writer, request_id, request_payload, trace, exc)
+            _write_trace_error(
+                trace_writer,
+                request_id,
+                request_payload,
+                trace,
+                exc,
+                compiler_fingerprint=compiler_fingerprint,
+            )
             raise HTTPException(status_code=422, detail=exc.detail) from exc
         except LLMTimeoutError as exc:
             trace = getattr(exc, "compiler_trace", None)
-            _write_trace_error(trace_writer, request_id, request_payload, trace, exc)
+            _write_trace_error(
+                trace_writer,
+                request_id,
+                request_payload,
+                trace,
+                exc,
+                compiler_fingerprint=compiler_fingerprint,
+            )
             raise HTTPException(status_code=504, detail=str(exc)) from exc
         except LLMProviderError as exc:
             trace = getattr(exc, "compiler_trace", None)
-            _write_trace_error(trace_writer, request_id, request_payload, trace, exc)
+            _write_trace_error(
+                trace_writer,
+                request_id,
+                request_payload,
+                trace,
+                exc,
+                compiler_fingerprint=compiler_fingerprint,
+            )
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         except (
             CompilerExecutionError,
@@ -219,12 +282,26 @@ def create_app(
             WorkflowError,
         ) as exc:
             trace = getattr(exc, "trace", None) or getattr(exc, "compiler_trace", None)
-            _write_trace_error(trace_writer, request_id, request_payload, trace, exc)
+            _write_trace_error(
+                trace_writer,
+                request_id,
+                request_payload,
+                trace,
+                exc,
+                compiler_fingerprint=compiler_fingerprint,
+            )
             detail = exc.detail if isinstance(exc, CompilerExecutionError) else str(exc)
             raise HTTPException(status_code=500, detail=detail) from exc
         except Exception as exc:
             trace = getattr(exc, "compiler_trace", None)
-            _write_trace_error(trace_writer, request_id, request_payload, trace, exc)
+            _write_trace_error(
+                trace_writer,
+                request_id,
+                request_payload,
+                trace,
+                exc,
+                compiler_fingerprint=compiler_fingerprint,
+            )
             raise HTTPException(status_code=500, detail="Unexpected compiler failure") from exc
 
     return app
@@ -343,6 +420,7 @@ def _write_trace(
     request_id: str,
     request: dict[str, Any],
     trace: RunTrace | None,
+    compiler_fingerprint: str | None = None,
     result: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
 ) -> None:
@@ -351,6 +429,7 @@ def _write_trace(
             request_id=request_id,
             request=request,
             trace=trace,
+            compiler_fingerprint=compiler_fingerprint,
             result=result,
             error=error,
         )
@@ -362,6 +441,8 @@ def _write_trace_error(
     request: dict[str, Any],
     trace: RunTrace | None,
     exc: Exception,
+    *,
+    compiler_fingerprint: str | None = None,
 ) -> None:
     detail = getattr(exc, "detail", None)
     try:
@@ -370,6 +451,7 @@ def _write_trace_error(
             request_id=request_id,
             request=request,
             trace=trace,
+            compiler_fingerprint=compiler_fingerprint,
             error={
                 "type": type(exc).__name__,
                 "message": str(exc),

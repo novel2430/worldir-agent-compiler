@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .catalog import WorldCatalog
+
 
 @dataclass(slots=True)
 class ValidationResult:
@@ -17,6 +19,7 @@ class IRSpec:
         self.path = Path(path)
         self.data = json.loads(self.path.read_text(encoding="utf-8"))
         self.semantic_guidance = self._load_semantic_guidance()
+        self.catalog = self._load_catalog()
 
     def _load_semantic_guidance(self) -> str:
         """Load optional human-readable semantics declared by the IR spec.
@@ -43,8 +46,24 @@ class IRSpec:
             )
         return text
 
+    def _load_catalog(self) -> WorldCatalog | None:
+        filename = self.data.get("world_catalog_file")
+        if filename is None:
+            return None
+        if not isinstance(filename, str) or not filename.strip():
+            raise ValueError("world_catalog_file must be a non-empty string")
+        catalog_path = self.path.parent / filename
+        if not catalog_path.is_file():
+            raise ValueError(f"World Catalog file does not exist: {catalog_path}")
+        return WorldCatalog(catalog_path)
+
     def pretty(self) -> str:
         return json.dumps(self.data, ensure_ascii=False, indent=2)
+
+    def catalog_pretty(self) -> str:
+        if self.catalog is None:
+            return "No controlled World Catalog is defined for this IR version."
+        return self.catalog.pretty()
 
     @property
     def anchors(self) -> set[str]:
@@ -123,6 +142,16 @@ class IRValidator:
                         id_types[obj_id] = primitive_name
                 elif "id" in obj:
                     issues.append(f"{loc}.id must be a string")
+
+                object_type = obj.get("type")
+                if isinstance(object_type, str) and self.spec.catalog is not None:
+                    allowed_types = self.spec.catalog.allowed_types(primitive_name)
+                    if object_type not in allowed_types:
+                        issues.append(
+                            f"{loc}.type is not in {self.spec.catalog.version} "
+                            f"for {primitive_name}: {object_type!r}; "
+                            f"allowed: {sorted(allowed_types)}"
+                        )
 
                 for field, value in obj.items():
                     rule = p["fields"].get(field)

@@ -2,6 +2,19 @@
 
 This file explains **how to choose between legal V2 structures**. The JSON spec defines what is structurally valid; these rules define the intended semantics.
 
+## Controlled world vocabulary
+
+The active World Catalog injected into each compiler pass is the single machine-readable source of allowed object `type` values and their semantic roles. IDs remain descriptive and unique, but `type` is a canonical semantic category rather than a free-form label.
+
+Use exactly the catalog's singular `snake_case` values. Normalize synonyms and descriptive phrases to a listed type when this preserves their core meaning. Do not create compound types by attaching mood, condition, size, location, or style adjectives to a canonical type. Such modifiers do not become new `type` values; represent them only if another active IR field faithfully supports them.
+
+Select content in two passes:
+
+1. classify the concepts explicitly requested by the user into canonical objects from the vocabulary;
+2. for every requested composite Region, perform the concept-realization check below and select the smallest strongly implied observable constituents from the same vocabulary.
+
+The vocabulary limits what may be generated; it does not itself define fixed composition pairs. Decide whether a constituent is strongly implied from ordinary world knowledge, the full user description, and explicit exceptions. A listed type that is merely plausible remains unrelated content and must not be added.
+
 ## 0. Primitive classification: choose the semantic role before encoding placement
 
 Choose the Primitive from the **world role of the thing**, not from its physical size or how many words describe it.
@@ -28,6 +41,22 @@ Examples:
 - “在森林南边增加一个小村庄” → add a `Region` village with `direction_of(target=forest, direction=south)`.
 - “在村庄里增加一个小教堂” → add an `Entity` church with `inside(target=village)`.
 - “墓地作为一个区域，里面稀疏分布墓碑” → graveyard is a `Region`; tombstones are a `Distribution`.
+
+## 0.1 Concept realization: represent what makes a place recognizable
+
+A world concept is not always fully realized by an object whose `type` merely repeats the user's noun. Some Regions denote environments, settlements, or other composite places whose identity normally depends on characteristic physical constituents.
+
+When translating or editing such a concept:
+
+- use ordinary world knowledge and the user's context to infer the **smallest set of strongly implied constituents** needed for the concept to be visibly recognizable in the generated world;
+- encode those constituents with the appropriate IR primitives and relate them to the composite place when the active contract supports it;
+- prefer a `Distribution` when a constituent is naturally a repeated population, and an `Entity` only when a distinct individual object is semantically warranted;
+- leave amount, arrangement, subtype, and other details unspecified unless the user or unavoidable concept semantics supports them;
+- treat these constituents as realization of requested content, not as unrelated embellishment.
+
+This is semantic completion, not unrestricted worldbuilding. Do not add decorative landmarks, optional amenities, narrative props, or an exhaustive inventory merely because they are plausible. Do not materialize a merely metaphorical use of a place word. Explicit user constraints override defaults: if the user says a place is empty, treeless, buildingless, only symbolic, or otherwise atypical, preserve that meaning instead of restoring stereotypical contents.
+
+A useful test is: **if the Region label were hidden, would the remaining IR contain enough direct, observable evidence to recognize the requested kind of place?** If not, and the missing evidence is strongly entailed by the concept rather than merely plausible, the representation is incomplete.
 
 ## 1. `placement`: absolute world anchor vs object-relative relation
 

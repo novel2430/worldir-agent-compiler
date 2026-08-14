@@ -58,7 +58,21 @@ def runtime_context_payload():
     }
 
 
-def make_compiler(llm, *, editor_attempts=3):
+def pass_judgment():
+    return json.dumps({
+        "verdict": "pass",
+        "faithful": True,
+        "complete": True,
+        "restrained": True,
+        "preserved": True,
+        "unsupported_user_meaning": [],
+        "missing_observable_evidence": [],
+        "invented_content": [],
+        "critique": "",
+    })
+
+
+def make_compiler(llm, *, editor_attempts=3, fingerprint="test-fingerprint"):
     def factory():
         return WorldIRWorkflow(
             llm=llm,
@@ -66,7 +80,7 @@ def make_compiler(llm, *, editor_attempts=3):
             spec=IRSpec(ROOT / "config/world_ir_v2.json"),
             config=WorkflowConfig(editor_max_attempts=editor_attempts),
         )
-    return WorldCompiler(factory)
+    return WorldCompiler(factory, fingerprint=fingerprint)
 
 
 def make_http_llm():
@@ -107,7 +121,7 @@ class CompilerCoreServerModeTests(unittest.TestCase):
                 "unsupported": [],
             })],
             "editor": [json.dumps(draft)],
-            "ir_validator": [json.dumps({"valid": True, "issues": [], "critique": ""})],
+            "semantic_judge": [pass_judgment()],
         })
         compiler = make_compiler(llm)
         result = compiler.compile_world(
@@ -120,7 +134,7 @@ class CompilerCoreServerModeTests(unittest.TestCase):
         self.assertIn("# Shared Runtime rules", llm.prompts[0])
         self.assertIn("clearing_01", llm.prompts[0])
 
-    def test_runtime_reference_error_retries_editor_before_semantic_validator(self):
+    def test_runtime_reference_error_retries_editor_before_semantic_judge(self):
         candidate = copy.deepcopy(state_v2())
         candidate["regions"].append({"id": "graveyard", "type": "graveyard"})
         invalid_draft = {
@@ -142,7 +156,7 @@ class CompilerCoreServerModeTests(unittest.TestCase):
                 "unsupported": [],
             })],
             "editor": [json.dumps(invalid_draft), json.dumps(valid_draft)],
-            "ir_validator": [json.dumps({"valid": True, "issues": [], "critique": ""})],
+            "semantic_judge": [pass_judgment()],
         })
         result = make_compiler(llm).compile_world(
             "把空地变成墓地。",
@@ -181,7 +195,10 @@ class ServerHTTPTests(unittest.TestCase):
         self.assertEqual(llm.calls, [])
 
     def test_initial_compile_returns_compile_result_contract(self):
-        llm = FakeLLM({"initial_translator": [json.dumps(state_v2())]})
+        llm = FakeLLM({
+            "initial_translator": [json.dumps(state_v2())],
+            "semantic_judge": [pass_judgment()],
+        })
         client = TestClient(create_app(make_compiler(llm)))
         response = client.post(
             "/v1/compile",
@@ -197,7 +214,10 @@ class ServerHTTPTests(unittest.TestCase):
         self.assertNotIn("route", payload["meta"])
 
     def test_enabled_cache_skips_compiler_for_identical_request(self):
-        llm = FakeLLM({"initial_translator": [json.dumps(state_v2())]})
+        llm = FakeLLM({
+            "initial_translator": [json.dumps(state_v2())],
+            "semantic_judge": [pass_judgment()],
+        })
         with tempfile.TemporaryDirectory() as temp_dir:
             cache = CompileCache(CacheConfig(enabled=True, dir=temp_dir))
             client = TestClient(
@@ -210,7 +230,7 @@ class ServerHTTPTests(unittest.TestCase):
 
             self.assertEqual(first.status_code, 200, first.text)
             self.assertEqual(second.status_code, 200, second.text)
-            self.assertEqual(llm.calls, ["initial_translator"])
+            self.assertEqual(llm.calls, ["initial_translator", "semantic_judge"])
             self.assertEqual(first.json()["world_ir"], second.json()["world_ir"])
             self.assertNotEqual(
                 first.json()["meta"]["request_id"],
@@ -223,7 +243,10 @@ class ServerHTTPTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = CacheConfig(enabled=True, dir=temp_dir)
 
-            first_llm = FakeLLM({"initial_translator": [json.dumps(state_v2())]})
+            first_llm = FakeLLM({
+                "initial_translator": [json.dumps(state_v2())],
+                "semantic_judge": [pass_judgment()],
+            })
             first_client = TestClient(
                 create_app(
                     make_compiler(first_llm),
@@ -246,9 +269,40 @@ class ServerHTTPTests(unittest.TestCase):
             self.assertEqual(second_llm.calls, [])
             self.assertEqual(first.json()["world_ir"], second.json()["world_ir"])
 
+    def test_cache_is_invalidated_by_compiler_fingerprint(self):
+        request = compile_request(current_ir=None)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = CacheConfig(enabled=True, dir=temp_dir)
+            first_llm = FakeLLM({
+                "initial_translator": [json.dumps(state_v2())],
+                "semantic_judge": [pass_judgment()],
+            })
+            second_llm = FakeLLM({
+                "initial_translator": [json.dumps(state_v2())],
+                "semantic_judge": [pass_judgment()],
+            })
+
+            first = TestClient(create_app(
+                make_compiler(first_llm, fingerprint="compiler-a"),
+                compile_cache=CompileCache(config),
+            )).post("/v1/compile", json=request)
+            second = TestClient(create_app(
+                make_compiler(second_llm, fingerprint="compiler-b"),
+                compile_cache=CompileCache(config),
+            )).post("/v1/compile", json=request)
+
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(second.status_code, 200, second.text)
+            self.assertEqual(
+                second_llm.calls,
+                ["initial_translator", "semantic_judge"],
+            )
+            self.assertEqual(len(list(Path(temp_dir).glob("*.json"))), 2)
+
     def test_disabled_cache_does_not_reuse_response(self):
         llm = FakeLLM({
-            "initial_translator": [json.dumps(state_v2()), json.dumps(state_v2())]
+            "initial_translator": [json.dumps(state_v2()), json.dumps(state_v2())],
+            "semantic_judge": [pass_judgment(), pass_judgment()],
         })
         with tempfile.TemporaryDirectory() as temp_dir:
             cache = CompileCache(CacheConfig(enabled=False, dir=temp_dir))
@@ -264,7 +318,12 @@ class ServerHTTPTests(unittest.TestCase):
             self.assertEqual(second.status_code, 200, second.text)
             self.assertEqual(
                 llm.calls,
-                ["initial_translator", "initial_translator"],
+                [
+                    "initial_translator",
+                    "semantic_judge",
+                    "initial_translator",
+                    "semantic_judge",
+                ],
             )
             self.assertEqual(list(Path(temp_dir).glob("*.json")), [])
 
@@ -437,7 +496,10 @@ class ServerHTTPTests(unittest.TestCase):
         self.assertNotIn("runtime_fact_ops", response.json())
 
     def test_server_trace_contains_request_workflow_and_result(self):
-        llm = FakeLLM({"initial_translator": [json.dumps(state_v2())]})
+        llm = FakeLLM({
+            "initial_translator": [json.dumps(state_v2())],
+            "semantic_judge": [pass_judgment()],
+        })
         with tempfile.TemporaryDirectory() as temp_dir:
             writer = ServerTraceWriter(TraceConfig(enabled=True, dir=temp_dir))
             client = TestClient(create_app(make_compiler(llm), trace_writer=writer))
@@ -447,8 +509,13 @@ class ServerHTTPTests(unittest.TestCase):
             self.assertEqual(len(paths), 1)
             trace = json.loads(paths[0].read_text(encoding="utf-8"))
             self.assertEqual(trace["request_id"], response.json()["meta"]["request_id"])
+            self.assertEqual(trace["compiler_fingerprint"], "test-fingerprint")
             self.assertEqual(trace["workflow"]["mode"], "initial")
             self.assertEqual(trace["workflow"]["validations"][0]["layer"], "world_ir")
+            self.assertEqual(
+                trace["workflow"]["validations"][1]["layer"],
+                "semantic_judge",
+            )
             self.assertEqual(trace["result"]["status"], "ok")
 
     def test_request_validation_failures_write_trace_without_workflow(self):

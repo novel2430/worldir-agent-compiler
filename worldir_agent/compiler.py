@@ -32,8 +32,11 @@ class WorldCompiler:
     def __init__(
         self,
         workflow: WorldIRWorkflow | Callable[[], WorldIRWorkflow],
+        *,
+        fingerprint: str = "unspecified",
     ):
         self._workflow_factory = workflow if callable(workflow) else lambda: workflow
+        self.fingerprint = fingerprint
 
     def compile_world(
         self,

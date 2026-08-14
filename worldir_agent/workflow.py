@@ -39,8 +39,13 @@ class WorldIRWorkflow:
         config: WorkflowConfig,
         route_override: str = "auto",
         runtime_semantics: str | None = None,
+        judge_llm: LLM | None = None,
     ):
         self.llm = llm
+        # A separate client instance makes the context boundary explicit. The
+        # configured provider/model may still be shared; no generator messages,
+        # plans, or semantic intents are passed to this client.
+        self.judge_llm = judge_llm or llm
         self.prompts = prompts
         self.spec = spec
         self.validator = IRValidator(spec)
@@ -56,6 +61,7 @@ class WorldIRWorkflow:
             name,
             IR_SCHEMA_JSON=self.spec.pretty(),
             IR_SEMANTIC_GUIDANCE=self.spec.semantic_guidance,
+            WORLD_CATALOG_JSON=self.spec.catalog_pretty(),
             **values,
         )
 
@@ -97,14 +103,23 @@ class WorldIRWorkflow:
             require_compile_draft=require_compile_draft,
         )
 
-    def _call_json(self, trace: RunTrace, node: str, prompt: str, attempt: int = 1) -> dict[str, Any]:
+    def _call_json(
+        self,
+        trace: RunTrace,
+        node: str,
+        prompt: str,
+        attempt: int = 1,
+        *,
+        llm: LLM | None = None,
+    ) -> dict[str, Any]:
         current_prompt = prompt
         current_node = node
         raw = ""
+        client = llm or self.llm
 
         for repair_attempt in range(0, self.config.json_repair_max_attempts + 1):
             try:
-                raw = self.llm.complete(current_node, current_prompt)
+                raw = client.complete(current_node, current_prompt)
             except Exception as exc:
                 trace.add(TraceEvent(
                     node=current_node,
@@ -154,6 +169,8 @@ class WorldIRWorkflow:
         trace = RunTrace(mode="initial")
         self.last_trace = trace
         feedback = "None"
+        empty_context = RuntimeContext.model_validate({"version": "1", "facts": []})
+        last_issues: list[str] = []
         for attempt in range(1, self.config.initial_max_attempts + 1):
             prompt = self._render_ir_prompt(
                 "initial_translator",
@@ -168,13 +185,44 @@ class WorldIRWorkflow:
                 valid=local.valid,
                 issues=local.issues,
             )
-            if local.valid:
+            if not local.valid:
+                last_issues = local.issues
+                feedback = "Local schema/reference/catalog errors:\n" + "\n".join(
+                    f"- {issue}" for issue in local.issues
+                )
+                continue
+
+            draft = CompileDraft(
+                world_ir=candidate,
+                runtime_bindings=[],
+                runtime_fact_ops=[],
+            )
+            judgment = self._judge_candidate(
+                trace,
+                mode="initial",
+                user_prompt=user_prompt,
+                current_ir=None,
+                runtime_context=empty_context,
+                draft=draft,
+                attempt=attempt,
+            )
+            if judgment["verdict"] == "pass":
                 return WorkflowResult("ok", candidate, {"mode": "initial"}, trace)
-            feedback = "\n".join(f"- {x}" for x in local.issues)
+            if judgment["verdict"] == "ir_gap":
+                return self._judge_ir_gap_result(
+                    trace,
+                    judgment,
+                    detail={"mode": "initial"},
+                )
+
+            last_issues = self._judgment_issues(judgment)
+            feedback = "Independent Semantic Judge feedback:\n" + "\n".join(
+                f"- {issue}" for issue in last_issues
+            )
         return WorkflowResult(
             "validation_failed",
             None,
-            {"issues": local.issues},
+            {"issues": last_issues, "last_feedback": feedback},
             trace,
         )
 
@@ -318,23 +366,16 @@ class WorldIRWorkflow:
                 )
                 continue
 
-            validator_prompt = self._render_edit_prompt(
-                "ir_validator",
-                runtime_context,
-                CURRENT_IR=pretty_json(current_ir),
-                USER_PROMPT=user_prompt,
-                SEMANTIC_INTENT=pretty_json(semantic_intent),
-                CANDIDATE_DRAFT=pretty_json(draft.model_dump(mode="json")),
-            )
-            verdict = self._call_json(trace, "ir_validator", validator_prompt, attempt)
-            semantic_valid = bool(verdict.get("valid"))
-            trace.add_validation(
-                layer="semantic",
+            judgment = self._judge_candidate(
+                trace,
+                mode="edit",
+                user_prompt=user_prompt,
+                current_ir=current_ir,
+                runtime_context=runtime_context,
+                draft=draft,
                 attempt=attempt,
-                valid=semantic_valid,
-                issues=verdict.get("issues") or verdict.get("critique") or [],
             )
-            if semantic_valid:
+            if judgment["verdict"] == "pass":
                 return WorkflowResult(
                     "ok",
                     candidate,
@@ -355,7 +396,20 @@ class WorldIRWorkflow:
                         for operation in draft.runtime_fact_ops
                     ],
                 )
-            editor_feedback = str(verdict.get("critique") or verdict.get("issues") or "Validator rejected the candidate IR")
+            if judgment["verdict"] == "ir_gap":
+                return self._judge_ir_gap_result(
+                    trace,
+                    judgment,
+                    detail={
+                        "mode": "edit",
+                        "route": route,
+                        "router": router_output,
+                        "semantic_intent": semantic_intent,
+                    },
+                )
+            editor_feedback = "Independent Semantic Judge feedback:\n" + "\n".join(
+                f"- {issue}" for issue in self._judgment_issues(judgment)
+            )
 
         return WorkflowResult(
             "validation_failed",
@@ -364,6 +418,151 @@ class WorldIRWorkflow:
                 "route": route,
                 "semantic_intent": semantic_intent,
                 "last_feedback": editor_feedback,
+            },
+            trace,
+        )
+
+    def _judge_candidate(
+        self,
+        trace: RunTrace,
+        *,
+        mode: str,
+        user_prompt: str,
+        current_ir: dict[str, Any] | None,
+        runtime_context: RuntimeContext,
+        draft: CompileDraft,
+        attempt: int,
+    ) -> dict[str, Any]:
+        judge_prompt = self._render_edit_prompt(
+            "semantic_judge",
+            runtime_context,
+            MODE=mode,
+            CURRENT_IR="null" if current_ir is None else pretty_json(current_ir),
+            USER_PROMPT=user_prompt,
+            CANDIDATE_DRAFT=pretty_json(draft.model_dump(mode="json")),
+        )
+        judgment = self._call_json(
+            trace,
+            "semantic_judge",
+            judge_prompt,
+            attempt,
+            llm=self.judge_llm,
+        )
+        self._validate_judgment(judgment)
+        issues = self._judgment_issues(judgment)
+        trace.add_validation(
+            layer="semantic_judge",
+            attempt=attempt,
+            valid=judgment["verdict"] == "pass",
+            issues=issues,
+        )
+        return judgment
+
+    @staticmethod
+    def _validate_judgment(judgment: dict[str, Any]) -> None:
+        expected_fields = {
+            "verdict",
+            "faithful",
+            "complete",
+            "restrained",
+            "preserved",
+            "unsupported_user_meaning",
+            "missing_observable_evidence",
+            "invented_content",
+            "critique",
+        }
+        if set(judgment) != expected_fields:
+            missing = sorted(expected_fields - set(judgment))
+            extra = sorted(set(judgment) - expected_fields)
+            raise WorkflowError(
+                "Semantic Judge returned an invalid contract shape: "
+                f"missing={missing}, extra={extra}"
+            )
+
+        verdict = judgment.get("verdict")
+        if verdict not in {"pass", "retry", "ir_gap"}:
+            raise WorkflowError(
+                f"Semantic Judge returned unsupported verdict: {verdict!r}"
+            )
+
+        dimensions = ("faithful", "complete", "restrained", "preserved")
+        for field_name in dimensions:
+            if not isinstance(judgment.get(field_name), bool):
+                raise WorkflowError(
+                    f"Semantic Judge field {field_name!r} must be boolean"
+                )
+
+        list_fields = (
+            "unsupported_user_meaning",
+            "missing_observable_evidence",
+            "invented_content",
+        )
+        for field_name in list_fields:
+            value = judgment.get(field_name)
+            if not isinstance(value, list) or not all(
+                isinstance(item, str) for item in value
+            ):
+                raise WorkflowError(
+                    f"Semantic Judge field {field_name!r} must be a string array"
+                )
+
+        critique = judgment.get("critique")
+        if not isinstance(critique, str):
+            raise WorkflowError("Semantic Judge field 'critique' must be a string")
+        if verdict == "pass" and not all(judgment[field] for field in dimensions):
+            raise WorkflowError(
+                "Semantic Judge pass verdict conflicts with a failed dimension"
+            )
+        if verdict == "pass" and (
+            judgment["unsupported_user_meaning"]
+            or judgment["missing_observable_evidence"]
+            or judgment["invented_content"]
+            or critique.strip()
+        ):
+            raise WorkflowError(
+                "Semantic Judge pass verdict must not contain issues or critique"
+            )
+        if verdict == "ir_gap" and not judgment["unsupported_user_meaning"]:
+            raise WorkflowError(
+                "Semantic Judge ir_gap verdict requires unsupported_user_meaning"
+            )
+
+    @staticmethod
+    def _judgment_issues(judgment: dict[str, Any]) -> list[str]:
+        issues: list[str] = []
+        for field_name in (
+            "unsupported_user_meaning",
+            "missing_observable_evidence",
+            "invented_content",
+        ):
+            issues.extend(judgment.get(field_name, []))
+        critique = judgment.get("critique", "").strip()
+        if critique:
+            issues.append(critique)
+        return issues
+
+    def _judge_ir_gap_result(
+        self,
+        trace: RunTrace,
+        judgment: dict[str, Any],
+        *,
+        detail: dict[str, Any],
+    ) -> WorkflowResult:
+        unsupported = judgment["unsupported_user_meaning"]
+        reason = judgment["critique"].strip() or (
+            "The independent Semantic Judge found essential meaning outside the active contracts."
+        )
+        return WorkflowResult(
+            "ir_gap",
+            None,
+            {
+                **detail,
+                "semantic_judgment": judgment,
+                "expressibility": {
+                    "expressible": False,
+                    "reason": reason,
+                    "unsupported": unsupported,
+                },
             },
             trace,
         )

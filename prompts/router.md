@@ -20,6 +20,11 @@ A reference to a Runtime Fact does not by itself require deliberation.
 # Active World IR semantic guidance
 {{IR_SEMANTIC_GUIDANCE}}
 
+# Active World Catalog
+```json
+{{WORLD_CATALOG_JSON}}
+```
+
 # Shared Runtime rules
 {{RUNTIME_SEMANTICS}}
 

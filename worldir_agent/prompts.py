@@ -16,3 +16,12 @@ class PromptStore:
 
     def read(self, name: str) -> str:
         return (self.prompts_dir / f"{name}.md").read_text(encoding="utf-8").strip()
+
+    def snapshot(self) -> dict[str, str]:
+        """Return deterministic prompt material for compiler fingerprinting."""
+        return {
+            path.relative_to(self.prompts_dir).as_posix(): path.read_text(
+                encoding="utf-8"
+            )
+            for path in sorted(self.prompts_dir.rglob("*.md"))
+        }

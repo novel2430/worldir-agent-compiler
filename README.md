@@ -11,6 +11,9 @@ Initial Translator
    ↓
 Deterministic Validator
    ↓
+Independent Semantic Judge
+   ↑ retry / IR GAP
+   ↓
 State0
 
 
@@ -30,8 +33,8 @@ Router
                                         ↓
                                      Editor
                                         ↓
-                         Local Validator + LLM Validator
-                                  ↑ retry │
+                     Local Validator + Independent Judge
+                                  ↑ retry / IR GAP
                                         ↓
                                        IR'
 ```
@@ -77,7 +80,7 @@ enabled = true
 dir = ".cache/worldir-compiler"
 ```
 
-Cache key 由 canonical JSON request body 的 SHA-256 生成；只缓存成功的 `ok` / `ir_gap` 结果。命中时不会进入 Compiler workflow 或调用 LLM。删除 cache 目录即可手动失效全部缓存。
+Cache key 由 canonical JSON request body 和 compiler fingerprint 共同生成；fingerprint 覆盖模型与 workflow 配置、Prompt、IR Schema、语义指导、Runtime 规则和 World Catalog。修改任何编译语义都会自动避开旧缓存。只缓存成功的 `ok` / `ir_gap` 结果，命中时不会进入 Compiler workflow 或调用 LLM。
 
 ---
 
@@ -222,7 +225,7 @@ prompts/
 ├── planner_checker.md
 ├── expressibility.md
 ├── editor.md
-├── ir_validator.md
+├── semantic_judge.md
 └── json_repair.md
 ```
 
@@ -262,6 +265,14 @@ reference 类型
 ```
 
 所有 LLM Prompt 都会把这份规范注入进去。
+
+World IR V2 还通过：
+
+```text
+config/world_catalog_v1.json
+```
+
+声明当前后端可生成的有限类型及通用语义角色。Catalog 是 Prompt 与确定性类型校验共享的唯一来源；它不保存 `forest → tree` 一类固定组合映射。复合概念是否被充分实现由独立 Semantic Judge 根据原始用户请求判断。
 
 所以后续我们真的决定把 World IR 从 V0 改成 V0.1 / V1 时，主要修改：
 
@@ -330,11 +341,13 @@ village.location = south
 
 默认最多 3 次。
 
-### Editor ↔ Validator
+### Generator / Editor ↔ Independent Semantic Judge
 
 负责：
 
-> “已经确定可表达以后，Editor 有没有生成正确合法的新 IR？”
+> “候选 IR 是否忠实、完整、克制地实现了原始用户请求？”
+
+Judge 使用独立 LLM 请求，只看到原始请求、Current IR、Runtime Context、候选结果和正式契约，不接收 Planner、Semantic Intent 或生成器推理。
 
 默认最多 3 次。
 
@@ -460,6 +473,15 @@ Highly abstract:
 ```
 
 这样很快就能得到一批我们后续讨论 IR V1 的真实 failure cases。
+
+也可以把 Server 启动后运行不含 expected IR 映射的语义回归输入集：
+
+```bash
+python scripts/run_semantic_regression.py \
+  --out runs/semantic-regression.json
+```
+
+案例只保存原始请求、Current IR 与 Runtime Context；每个结果由编译流程中的独立 Semantic Judge 判定，输出文件保留实际 Compile Result 供跨模型、Prompt、Schema 和 Catalog 版本比较。
 
 ---
 

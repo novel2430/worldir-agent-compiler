@@ -524,7 +524,7 @@ def compact_trace(trace_dict: Json) -> list[Json]:
             continue
         node = str(event.get("node", ""))
         # Keep only outputs that help diagnose routing / planning / lowering.
-        if node.startswith(("router", "planner", "expressibility", "editor", "ir_validator")):
+        if node.startswith(("router", "planner", "expressibility", "editor", "semantic_judge")):
             result.append(
                 {
                     "node": node,

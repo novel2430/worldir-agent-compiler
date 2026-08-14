@@ -1,0 +1,73 @@
+{
+  "version": "World Catalog V1",
+  "types": {
+    "Region": {
+      "town": {
+        "roles": ["settlement", "composite_place"]
+      },
+      "village": {
+        "roles": ["settlement", "composite_place"]
+      },
+      "forest": {
+        "roles": ["natural_area", "vegetation_domain", "composite_place"]
+      },
+      "coast": {
+        "roles": ["natural_area", "shoreline", "composite_place"]
+      },
+      "graveyard": {
+        "roles": ["functional_area", "burial_place", "composite_place"]
+      },
+      "district": {
+        "roles": ["settlement_area", "composite_place"]
+      },
+      "field": {
+        "roles": ["natural_area", "open_land", "composite_place"]
+      },
+      "swamp": {
+        "roles": ["natural_area", "wetland", "composite_place"]
+      }
+    },
+    "Network": {
+      "road": {
+        "roles": ["transport_network"]
+      },
+      "path": {
+        "roles": ["transport_network"]
+      }
+    },
+    "Entity": {
+      "church": {
+        "roles": ["building", "landmark"]
+      },
+      "lighthouse": {
+        "roles": ["building", "landmark"]
+      },
+      "tower": {
+        "roles": ["structure", "landmark"]
+      },
+      "bridge": {
+        "roles": ["structure", "crossing"]
+      },
+      "radio_tower": {
+        "roles": ["structure", "landmark"]
+      },
+      "gas_station": {
+        "roles": ["building", "service"]
+      }
+    },
+    "Distribution": {
+      "house": {
+        "roles": ["building", "habitation", "repeated_constituent"]
+      },
+      "tree": {
+        "roles": ["vegetation", "repeated_constituent"]
+      },
+      "tombstone": {
+        "roles": ["burial_marker", "repeated_constituent"]
+      },
+      "lamp": {
+        "roles": ["street_furniture", "repeated_constituent"]
+      }
+    }
+  }
+}

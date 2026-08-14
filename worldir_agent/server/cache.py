@@ -14,11 +14,11 @@ from .models import CompileResult, CompileResultIRGap, CompileResultOk
 
 
 _COMPILE_RESULT_ADAPTER = TypeAdapter(CompileResult)
-_CACHE_FORMAT_VERSION = 1
+_CACHE_FORMAT_VERSION = 2
 
 
 class CompileCache:
-    """Small persistent cache keyed by the canonical CompileRequest body."""
+    """Persistent cache keyed by request plus compiler fingerprint."""
 
     def __init__(self, config: CacheConfig):
         self.config = config
@@ -29,11 +29,12 @@ class CompileCache:
         request_payload: dict[str, Any],
         *,
         request_id: str,
+        compiler_fingerprint: str,
     ) -> CompileResultOk | CompileResultIRGap | None:
         if not self.config.enabled:
             return None
 
-        path = self._path_for(request_payload)
+        path = self._path_for(request_payload, compiler_fingerprint)
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -46,6 +47,8 @@ class CompileCache:
         # The request is stored as a cheap collision/corruption guard in
         # addition to using a SHA-256 filename.
         if record.get("request") != request_payload:
+            return None
+        if record.get("compiler_fingerprint") != compiler_fingerprint:
             return None
 
         cached_response = record.get("response")
@@ -68,13 +71,16 @@ class CompileCache:
         self,
         request_payload: dict[str, Any],
         response: CompileResultOk | CompileResultIRGap,
+        *,
+        compiler_fingerprint: str,
     ) -> None:
         if not self.config.enabled:
             return
 
-        path = self._path_for(request_payload)
+        path = self._path_for(request_payload, compiler_fingerprint)
         record = {
             "version": _CACHE_FORMAT_VERSION,
+            "compiler_fingerprint": compiler_fingerprint,
             "request": request_payload,
             "response": response.model_dump(mode="json", exclude_none=True),
         }
@@ -97,9 +103,16 @@ class CompileCache:
                 except OSError:
                     pass
 
-    def _path_for(self, request_payload: dict[str, Any]) -> Path:
+    def _path_for(
+        self,
+        request_payload: dict[str, Any],
+        compiler_fingerprint: str,
+    ) -> Path:
         canonical = json.dumps(
-            request_payload,
+            {
+                "compiler_fingerprint": compiler_fingerprint,
+                "request": request_payload,
+            },
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),

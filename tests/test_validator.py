@@ -110,6 +110,13 @@ class V2ValidatorTests(unittest.TestCase):
         result = self.validator.validate(self.state0)
         self.assertTrue(result.valid, result.issues)
 
+    def test_type_outside_world_catalog_is_rejected(self):
+        ir = copy.deepcopy(self.state0)
+        ir["regions"][0]["type"] = "abandoned_seaside_town"
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any("World Catalog V1" in issue for issue in result.issues))
+
     def test_region_can_use_relative_placement_without_anchor(self):
         ir = copy.deepcopy(self.state0)
         ir["regions"].append({

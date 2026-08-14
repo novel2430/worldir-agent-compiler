@@ -47,8 +47,18 @@ class SmokeLLM:
                 }],
                 "runtime_fact_ops": [],
             })
-        if node == "ir_validator":
-            return json.dumps({"valid": True, "issues": [], "critique": ""})
+        if node == "semantic_judge":
+            return json.dumps({
+                "verdict": "pass",
+                "faithful": True,
+                "complete": True,
+                "restrained": True,
+                "preserved": True,
+                "unsupported_user_meaning": [],
+                "missing_observable_evidence": [],
+                "invented_content": [],
+                "critique": "",
+            })
         raise AssertionError(f"Unexpected smoke compiler node: {node}")
 
 

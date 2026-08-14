@@ -1,6 +1,7 @@
 {
   "version": "World IR V2",
   "semantic_guidance_file": "world_ir_v2_semantics.md",
+  "world_catalog_file": "world_catalog_v1.json",
   "root_collections": {
     "regions": "Region",
     "networks": "Network",

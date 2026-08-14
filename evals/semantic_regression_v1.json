@@ -1,0 +1,36 @@
+{
+  "version": "Semantic Regression Inputs V1",
+  "description": "Input-only cases. Semantic acceptance is decided by the compiler's independent-context Judge; this suite intentionally contains no expected IR mappings.",
+  "cases": [
+    {
+      "id": "initial_forest_realization",
+      "prompt": "世界西边有一片森林。",
+      "current_ir": null
+    },
+    {
+      "id": "initial_explicit_treeless_exception",
+      "prompt": "世界西边有一片没有树的森林。",
+      "current_ir": null
+    },
+    {
+      "id": "initial_town_realization",
+      "prompt": "建造一个靠近东部海岸的小镇。",
+      "current_ir": null
+    },
+    {
+      "id": "initial_style_capability_gap",
+      "prompt": "生成一个废弃海边小镇，废弃状态必须被保留。",
+      "current_ir": null
+    },
+    {
+      "id": "initial_exact_distance_gap",
+      "prompt": "森林必须距离海岸精确五十米。",
+      "current_ir": null
+    },
+    {
+      "id": "edit_does_not_expand_unrelated_regions",
+      "prompt": "把教堂移动到世界北边，其他内容保持不变。",
+      "current_ir_file": "../examples/state0_v2.json"
+    }
+  ]
+}

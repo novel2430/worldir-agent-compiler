@@ -1,5 +1,17 @@
 # Server V0 Implementation Report
 
+## Post-report semantic compilation update
+
+The compiler has since added a larger semantic-control mechanism:
+
+- `config/world_catalog_v1.json` is now the machine-readable source of allowed World IR V2 object types and generic roles.
+- Deterministic World IR validation rejects Catalog-external types but contains no concept-to-constituent composition mappings.
+- Initial generation and edit compilation both use an independent-context `semantic_judge` LLM pass. The Judge sees the original request and formal contracts, but never sees Planner output, Semantic Intent, Generator prompts, or Generator reasoning.
+- Judge `retry` feedback is returned to the Initial Translator or Editor within their bounded retry loops; Judge `ir_gap` becomes a normal Compile Result IR GAP.
+- Persistent cache identity now includes a compiler fingerprint over model/workflow settings, prompts, IR schema and semantics, Runtime rules, and World Catalog, so semantic compiler changes cannot reuse stale request-only cache entries.
+
+The original report below describes the preceding Server V0 milestone and its then-current test count.
+
 ## Scope implemented
 
 Implemented the missing LLM Compiler Server V0 code defined by `docs/server_v0/LLM_COMPILER_SERVER_V0_DESIGN.md`:

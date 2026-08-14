@@ -75,6 +75,7 @@ class ServerTraceWriter:
         request_id: str,
         request: dict[str, Any],
         trace: RunTrace | None,
+        compiler_fingerprint: str | None = None,
         result: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
     ) -> Path | None:
@@ -86,6 +87,7 @@ class ServerTraceWriter:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "request_id": request_id,
+            "compiler_fingerprint": compiler_fingerprint,
             "request": request,
             "workflow": (
                 trace.to_dict(

@@ -159,7 +159,8 @@ worldir-agent-compiler/
 │   ├── config.toml
 │   ├── config.example.toml
 │   ├── world_ir_v2.json
-│   └── world_ir_v2_semantics.md
+│   ├── world_ir_v2_semantics.md
+│   └── world_catalog_v1.json
 │
 ├── prompts/
 │   ├── common/
@@ -170,7 +171,7 @@ worldir-agent-compiler/
 │   ├── planner_checker.md
 │   ├── expressibility.md
 │   ├── editor.md
-│   ├── ir_validator.md
+│   ├── semantic_judge.md
 │   └── json_repair.md
 │
 ├── worldir_agent/
@@ -810,6 +811,9 @@ Initial Translator
     ↓
 Deterministic World IR Validator
     ↓
+Independent Semantic Judge
+    ↑ retry / IR GAP
+    ↓
 World IR
     ↓
 wrap as CompileResult
@@ -843,7 +847,7 @@ bypass    deliberate
              ↓
  Deterministic Validation
              ↓
-    Semantic Validator
+ Independent Semantic Judge
              ↓
         CompileResult
 ```
@@ -934,13 +938,13 @@ Do not add a Binding Agent or Reference Resolver in V0.
 
 Validate three layers independently:
 
-1. **World IR** — existing V2 schema/reference/cross-field validation.
+1. **World IR** — V2 schema/reference/cross-field validation plus exact World Catalog type membership. No concept-composition rules live in deterministic validation.
 2. **Runtime Bindings** — `ir_object_id` exists in candidate IR; `runtime_fact_id` exists in request Runtime Context; placement enum is valid.
 3. **Runtime Fact Ops** — only `clear`; target runtime fact must exist.
 
-### Semantic Validator
+### Independent Semantic Judge
 
-Continue the current LLM semantic fidelity pass, expanded to check:
+Use a fresh LLM context that reconstructs requirements from the original User Prompt. Do not provide Generator prompts, Planner output, Semantic Intent, or Generator reasoning. The Judge checks:
 
 - correct interpretation of runtime references;
 - binding fidelity;
@@ -1167,11 +1171,12 @@ Everything else stays implementation-local.
 5. **Player actions are compressed into a deliberately small runtime fact vocabulary.**
 6. **Runtime Context is structured and deterministic; no log-summary LLM exists in V0.**
 7. **Runtime reference is solved through one-shot binding, not Runtime → IR promotion.**
-8. **Existing Router / Planner / Expressibility / Editor / Validator architecture is retained.**
+8. **Router / Planner / Expressibility / Editor remain, followed by an independent-context Semantic Judge that sees no Planner or Semantic Intent output.**
 9. **Editor becomes runtime-aware and emits a small Compile Draft.**
 10. **All LLM-owned prompts stay external and migrate to English; user prompts stay original-language.**
 11. **`config.toml` remains the central operational configuration file.**
 12. **Compile is transactional: failed compilation never partially mutates the running world.**
 13. **Real backend failures, not speculative language design, should drive later IR/runtime extensions.**
+14. **World Catalog is the machine-readable source of generatable types; semantic composition remains an LLM judgment rather than a fixed concept mapping table.**
 
 This is the implementation baseline for **LLM Compiler Server V0**.
