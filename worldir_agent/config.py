@@ -65,6 +65,12 @@ class TraceConfig:
 
 
 @dataclass(slots=True)
+class CacheConfig:
+    enabled: bool = False
+    dir: str = ".cache/worldir-compiler"
+
+
+@dataclass(slots=True)
 class AppConfig:
     llm: LLMConfig
     workflow: WorkflowConfig
@@ -73,6 +79,7 @@ class AppConfig:
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     prompts: PromptsConfig = field(default_factory=PromptsConfig)
     trace: TraceConfig = field(default_factory=TraceConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -86,6 +93,7 @@ def load_config(path: str | Path) -> AppConfig:
     runtime = RuntimeConfig(**data.get("runtime", {}))
     prompts = PromptsConfig(**data.get("prompts", {}))
     trace = TraceConfig(**data.get("trace", {}))
+    cache = CacheConfig(**data.get("cache", {}))
     return AppConfig(
         llm=llm,
         workflow=workflow,
@@ -94,4 +102,5 @@ def load_config(path: str | Path) -> AppConfig:
         runtime=runtime,
         prompts=prompts,
         trace=trace,
+        cache=cache,
     )

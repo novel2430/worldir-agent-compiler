@@ -38,3 +38,10 @@ enabled = true
 dir = "runs"
 store_prompts = true
 store_raw_responses = true
+
+[cache]
+# Persistent exact-request cache for POST /v1/compile.
+# When enabled, the canonical request body is hashed and successful ok/ir_gap
+# responses are reused without entering the LLM workflow.
+enabled = false
+dir = ".cache/worldir-compiler"

@@ -11,12 +11,13 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from worldir_agent.compiler import CompilerInputError, WorldCompiler
-from worldir_agent.config import LLMConfig, TraceConfig, WorkflowConfig
+from worldir_agent.config import CacheConfig, LLMConfig, TraceConfig, WorkflowConfig
 from worldir_agent.llm import HTTPJSONLLM, LLMProviderError, LLMTimeoutError
 from worldir_agent.prompts import PromptStore
 from worldir_agent.runtime.models import RuntimeContext
 from worldir_agent.schema import IRSpec
 from worldir_agent.server.app import create_app
+from worldir_agent.server.cache import CompileCache
 from worldir_agent.trace import ServerTraceWriter
 from worldir_agent.workflow import WorldIRWorkflow
 
@@ -194,6 +195,78 @@ class ServerHTTPTests(unittest.TestCase):
         self.assertEqual(payload["runtime_fact_ops"], [])
         self.assertEqual(payload["meta"]["mode"], "initial")
         self.assertNotIn("route", payload["meta"])
+
+    def test_enabled_cache_skips_compiler_for_identical_request(self):
+        llm = FakeLLM({"initial_translator": [json.dumps(state_v2())]})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = CompileCache(CacheConfig(enabled=True, dir=temp_dir))
+            client = TestClient(
+                create_app(make_compiler(llm), compile_cache=cache)
+            )
+            request = compile_request(current_ir=None)
+
+            first = client.post("/v1/compile", json=request)
+            second = client.post("/v1/compile", json=request)
+
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(second.status_code, 200, second.text)
+            self.assertEqual(llm.calls, ["initial_translator"])
+            self.assertEqual(first.json()["world_ir"], second.json()["world_ir"])
+            self.assertNotEqual(
+                first.json()["meta"]["request_id"],
+                second.json()["meta"]["request_id"],
+            )
+            self.assertEqual(len(list(Path(temp_dir).glob("*.json"))), 1)
+
+    def test_cache_persists_across_app_restart(self):
+        request = compile_request(current_ir=None)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = CacheConfig(enabled=True, dir=temp_dir)
+
+            first_llm = FakeLLM({"initial_translator": [json.dumps(state_v2())]})
+            first_client = TestClient(
+                create_app(
+                    make_compiler(first_llm),
+                    compile_cache=CompileCache(config),
+                )
+            )
+            first = first_client.post("/v1/compile", json=request)
+            self.assertEqual(first.status_code, 200, first.text)
+
+            second_llm = FakeLLM()
+            second_client = TestClient(
+                create_app(
+                    make_compiler(second_llm),
+                    compile_cache=CompileCache(config),
+                )
+            )
+            second = second_client.post("/v1/compile", json=request)
+
+            self.assertEqual(second.status_code, 200, second.text)
+            self.assertEqual(second_llm.calls, [])
+            self.assertEqual(first.json()["world_ir"], second.json()["world_ir"])
+
+    def test_disabled_cache_does_not_reuse_response(self):
+        llm = FakeLLM({
+            "initial_translator": [json.dumps(state_v2()), json.dumps(state_v2())]
+        })
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = CompileCache(CacheConfig(enabled=False, dir=temp_dir))
+            client = TestClient(
+                create_app(make_compiler(llm), compile_cache=cache)
+            )
+            request = compile_request(current_ir=None)
+
+            first = client.post("/v1/compile", json=request)
+            second = client.post("/v1/compile", json=request)
+
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(second.status_code, 200, second.text)
+            self.assertEqual(
+                llm.calls,
+                ["initial_translator", "initial_translator"],
+            )
+            self.assertEqual(list(Path(temp_dir).glob("*.json")), [])
 
     def test_ir_gap_is_http_200(self):
         llm = FakeLLM({

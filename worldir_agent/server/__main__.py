@@ -7,6 +7,7 @@ import uvicorn
 from ..config import load_config
 from ..trace import ServerTraceWriter
 from .app import build_compiler, create_app
+from .cache import CompileCache
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,7 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_config(args.config)
     compiler = build_compiler(config)
-    app = create_app(compiler, trace_writer=ServerTraceWriter(config.trace))
+    app = create_app(
+        compiler,
+        trace_writer=ServerTraceWriter(config.trace),
+        compile_cache=CompileCache(config.cache),
+    )
     uvicorn.run(
         app,
         host=config.server.host,

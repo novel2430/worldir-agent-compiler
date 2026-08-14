@@ -25,6 +25,7 @@ from ..prompts import PromptStore
 from ..schema import IRSpec
 from ..trace import RunTrace, ServerTraceWriter
 from ..workflow import WorkflowError, WorkflowResult, WorldIRWorkflow
+from .cache import CompileCache
 from .models import (
     CompileMeta,
     CompileRequest,
@@ -87,6 +88,7 @@ def create_app(
     compiler: CompilerProtocol,
     *,
     trace_writer: ServerTraceWriter | None = None,
+    compile_cache: CompileCache | None = None,
 ) -> FastAPI:
     app = FastAPI(title="WorldIR LLM Compiler Server", version="0.3.0")
 
@@ -169,6 +171,18 @@ def create_app(
         trace: RunTrace | None = None
         response: CompileResultOk | CompileResultIRGap | None = None
 
+        if compile_cache is not None:
+            cached = compile_cache.get(request_payload, request_id=request_id)
+            if cached is not None:
+                _write_trace(
+                    trace_writer,
+                    request_id=request_id,
+                    request=request_payload,
+                    trace=None,
+                    result=cached.model_dump(mode="json", exclude_none=True),
+                )
+                return cached
+
         try:
             workflow_result = compiler.compile_world(
                 request.prompt,
@@ -177,6 +191,8 @@ def create_app(
             )
             trace = workflow_result.trace
             response = _to_compile_result(request_id, workflow_result)
+            if compile_cache is not None:
+                compile_cache.put(request_payload, response)
             _write_trace(
                 trace_writer,
                 request_id=request_id,

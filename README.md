@@ -69,6 +69,16 @@ uv run python -m worldir_agent.server --config config/config.toml
 
 服务默认监听 `127.0.0.1:8787`。Server 使用 World IR V2、Runtime Context V1 和 Compile Result V1；它不保存 world session，调用方必须在每次编译时传入 Current World IR 与 Runtime Context。
 
+如果希望相同 `/v1/compile` 请求直接复用结果，可以在 config 中打开持久化 request cache：
+
+```toml
+[cache]
+enabled = true
+dir = ".cache/worldir-compiler"
+```
+
+Cache key 由 canonical JSON request body 的 SHA-256 生成；只缓存成功的 `ok` / `ir_gap` 结果。命中时不会进入 Compiler workflow 或调用 LLM。删除 cache 目录即可手动失效全部缓存。
+
 ---
 
 ## 1. 最快运行
