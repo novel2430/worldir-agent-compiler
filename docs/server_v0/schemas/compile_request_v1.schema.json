@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldir.local/schema/compile_request_v1.schema.json",
+  "title": "WorldIR CompileRequest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["prompt", "current_ir", "runtime_context"],
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "current_ir": {
+      "oneOf": [
+        {"type": "object"},
+        {"type": "null"}
+      ]
+    },
+    "runtime_context": {
+      "$ref": "runtime_context_v1.schema.json"
+    }
+  }
+}

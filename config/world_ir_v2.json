@@ -1,0 +1,544 @@
+{
+  "version": "World IR V2",
+  "semantic_guidance_file": "world_ir_v2_semantics.md",
+  "root_collections": {
+    "regions": "Region",
+    "networks": "Network",
+    "entities": "Entity",
+    "distributions": "Distribution"
+  },
+  "anchors": [
+    "north",
+    "south",
+    "east",
+    "west",
+    "center",
+    "northwest",
+    "northeast",
+    "southwest",
+    "southeast",
+    "whole"
+  ],
+  "relation_directions": [
+    "north",
+    "south",
+    "east",
+    "west",
+    "northwest",
+    "northeast",
+    "southwest",
+    "southeast"
+  ],
+  "relation_types": {
+    "inside": {
+      "required": [
+        "type",
+        "target"
+      ],
+      "optional": [],
+      "allowed_sources": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "allowed_targets": [
+        "Region"
+      ],
+      "symmetric": false,
+      "description": "The source is spatially contained within the target Region."
+    },
+    "near": {
+      "required": [
+        "type",
+        "target"
+      ],
+      "optional": [],
+      "allowed_sources": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "allowed_targets": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "symmetric": true,
+      "description": "The source should be spatially close to the target. Exact distance is backend-defined."
+    },
+    "far_from": {
+      "required": [
+        "type",
+        "target"
+      ],
+      "optional": [],
+      "allowed_sources": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "allowed_targets": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "symmetric": true,
+      "description": "The source should maintain clear spatial separation from the target. Exact distance is backend-defined."
+    },
+    "along": {
+      "required": [
+        "type",
+        "target"
+      ],
+      "optional": [],
+      "allowed_sources": [
+        "Entity",
+        "Distribution"
+      ],
+      "allowed_targets": [
+        "Network"
+      ],
+      "symmetric": false,
+      "description": "The source is placed or distributed along the target Network."
+    },
+    "direction_of": {
+      "required": [
+        "type",
+        "target",
+        "direction"
+      ],
+      "optional": [],
+      "allowed_sources": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "allowed_targets": [
+        "Region",
+        "Network",
+        "Entity",
+        "Distribution"
+      ],
+      "symmetric": false,
+      "direction_values": [
+        "north",
+        "south",
+        "east",
+        "west",
+        "northwest",
+        "northeast",
+        "southwest",
+        "southeast"
+      ],
+      "description": "The source lies in the specified qualitative direction relative to the target."
+    }
+  },
+  "value_schemas": {
+    "Placement": {
+      "kind": "object",
+      "required": [],
+      "optional": [
+        "anchor",
+        "relations"
+      ],
+      "fields": {
+        "anchor": {
+          "kind": "anchor"
+        },
+        "relations": {
+          "kind": "relation_list"
+        }
+      },
+      "description": "Backend-independent spatial placement semantics. anchor is world-relative; relations are object-relative and conjunctive."
+    },
+    "Topology": {
+      "kind": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "optional": [
+        "via"
+      ],
+      "fields": {
+        "from": {
+          "kind": "anchor_or_ref"
+        },
+        "to": {
+          "kind": "anchor_or_ref"
+        },
+        "via": {
+          "kind": "ref_list"
+        }
+      },
+      "description": "Network connectivity/topology, intentionally separate from spatial placement."
+    },
+    "Amount": {
+      "kind": "tagged_union",
+      "discriminator": "mode",
+      "variants": {
+        "count": {
+          "required": [
+            "mode",
+            "value"
+          ],
+          "optional": [],
+          "fields": {
+            "mode": {
+              "kind": "const",
+              "value": "count"
+            },
+            "value": {
+              "kind": "integer_nonnegative"
+            }
+          }
+        },
+        "density": {
+          "required": [
+            "mode",
+            "value"
+          ],
+          "optional": [],
+          "fields": {
+            "mode": {
+              "kind": "const",
+              "value": "density"
+            },
+            "value": {
+              "kind": "enum",
+              "values": [
+                "low",
+                "medium",
+                "high"
+              ]
+            }
+          }
+        }
+      },
+      "description": "One authoritative way to describe global population amount: exact count or qualitative density."
+    },
+    "Arrangement": {
+      "kind": "object",
+      "required": [
+        "type"
+      ],
+      "optional": [],
+      "fields": {
+        "type": {
+          "kind": "enum",
+          "values": [
+            "uniform",
+            "random",
+            "clustered"
+          ]
+        }
+      },
+      "description": "How instances are arranged within their placement domain. uniform means approximately even spacing, random means irregular stochastic placement without strong grouping, clustered means local groups separated by sparser space."
+    },
+    "SpatialSelector": {
+      "kind": "tagged_union",
+      "discriminator": "type",
+      "variants": {
+        "anchor": {
+          "required": [
+            "type",
+            "value"
+          ],
+          "optional": [],
+          "fields": {
+            "type": {
+              "kind": "const",
+              "value": "anchor"
+            },
+            "value": {
+              "kind": "anchor"
+            }
+          }
+        },
+        "near": {
+          "required": [
+            "type",
+            "target"
+          ],
+          "optional": [],
+          "fields": {
+            "type": {
+              "kind": "const",
+              "value": "near"
+            },
+            "target": {
+              "kind": "ref"
+            }
+          }
+        },
+        "far_from": {
+          "required": [
+            "type",
+            "target"
+          ],
+          "optional": [],
+          "fields": {
+            "type": {
+              "kind": "const",
+              "value": "far_from"
+            },
+            "target": {
+              "kind": "ref"
+            }
+          }
+        },
+        "direction_of": {
+          "required": [
+            "type",
+            "target",
+            "direction"
+          ],
+          "optional": [],
+          "fields": {
+            "type": {
+              "kind": "const",
+              "value": "direction_of"
+            },
+            "target": {
+              "kind": "ref"
+            },
+            "direction": {
+              "kind": "enum",
+              "values": [
+                "north",
+                "south",
+                "east",
+                "west",
+                "northwest",
+                "northeast",
+                "southwest",
+                "southeast"
+              ]
+            }
+          }
+        }
+      },
+      "description": "A qualitative spatial locus used by density profiles. This is not an object placement relation; it selects where on a profile an endpoint applies."
+    },
+    "GradientEndpoint": {
+      "kind": "object",
+      "required": [
+        "selector",
+        "density"
+      ],
+      "optional": [],
+      "fields": {
+        "selector": {
+          "kind": "schema_ref",
+          "schema": "SpatialSelector"
+        },
+        "density": {
+          "kind": "enum",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "DensityProfile": {
+      "kind": "tagged_union",
+      "discriminator": "type",
+      "variants": {
+        "gradient": {
+          "required": [
+            "type",
+            "from",
+            "to"
+          ],
+          "optional": [],
+          "fields": {
+            "type": {
+              "kind": "const",
+              "value": "gradient"
+            },
+            "from": {
+              "kind": "schema_ref",
+              "schema": "GradientEndpoint"
+            },
+            "to": {
+              "kind": "schema_ref",
+              "schema": "GradientEndpoint"
+            }
+          }
+        }
+      },
+      "description": "How qualitative density varies across space. V2 currently supports a continuous qualitative gradient between two spatial selectors; exact interpolation is backend-defined."
+    },
+    "Population": {
+      "kind": "object",
+      "required": [],
+      "optional": [
+        "amount",
+        "arrangement",
+        "density_profile"
+      ],
+      "fields": {
+        "amount": {
+          "kind": "schema_ref",
+          "schema": "Amount"
+        },
+        "arrangement": {
+          "kind": "schema_ref",
+          "schema": "Arrangement"
+        },
+        "density_profile": {
+          "kind": "schema_ref",
+          "schema": "DensityProfile"
+        }
+      },
+      "description": "Population semantics for repeated objects. arrangement is orthogonal to density specification. amount.mode=count may coexist with density_profile as a total budget; amount.mode=density is a uniform/global density specification and is mutually exclusive with density_profile.",
+      "constraints": [
+        {
+          "kind": "forbid_when",
+          "if": {
+            "path": "amount.mode",
+            "equals": "density"
+          },
+          "field_present": "density_profile",
+          "message": "population.amount.mode=density and population.density_profile are mutually exclusive: qualitative density is a uniform/global density specification, while density_profile is a spatially varying density specification. Use one or the other."
+        }
+      ]
+    }
+  },
+  "primitives": {
+    "Region": {
+      "required": [
+        "id",
+        "type"
+      ],
+      "optional": [
+        "placement"
+      ],
+      "fields": {
+        "id": {
+          "kind": "string"
+        },
+        "type": {
+          "kind": "string"
+        },
+        "placement": {
+          "kind": "schema_ref",
+          "schema": "Placement"
+        }
+      }
+    },
+    "Network": {
+      "required": [
+        "id",
+        "type",
+        "topology"
+      ],
+      "optional": [
+        "placement"
+      ],
+      "fields": {
+        "id": {
+          "kind": "string"
+        },
+        "type": {
+          "kind": "enum",
+          "values": [
+            "road",
+            "path"
+          ]
+        },
+        "topology": {
+          "kind": "schema_ref",
+          "schema": "Topology"
+        },
+        "placement": {
+          "kind": "schema_ref",
+          "schema": "Placement"
+        }
+      }
+    },
+    "Entity": {
+      "required": [
+        "id",
+        "type"
+      ],
+      "optional": [
+        "placement"
+      ],
+      "fields": {
+        "id": {
+          "kind": "string"
+        },
+        "type": {
+          "kind": "string"
+        },
+        "placement": {
+          "kind": "schema_ref",
+          "schema": "Placement"
+        }
+      }
+    },
+    "Distribution": {
+      "required": [
+        "id",
+        "type"
+      ],
+      "optional": [
+        "placement",
+        "population"
+      ],
+      "fields": {
+        "id": {
+          "kind": "string"
+        },
+        "type": {
+          "kind": "string"
+        },
+        "placement": {
+          "kind": "schema_ref",
+          "schema": "Placement"
+        },
+        "population": {
+          "kind": "schema_ref",
+          "schema": "Population"
+        }
+      }
+    }
+  },
+  "semantic_notes": [
+    "World IR V2 separates orthogonal semantic axes instead of adding many primitive-specific flat fields.",
+    "placement answers WHERE: world-relative anchor and object-relative relations. A placement may use either or both, and relations are conjunctive.",
+    "topology answers HOW A NETWORK CONNECTS: Network from/to/via live only inside topology and are separate from placement.",
+    "population answers HOW A REPEATED SET IS REALIZED. arrangement is orthogonal to density specification; count may serve as a total budget, while qualitative amount density and density_profile are alternative density specifications.",
+    "population.amount uses exactly one mode: count for an exact/non-negative target count, or density for qualitative uniform/global density.",
+    "population.arrangement describes instance-to-instance arrangement inside the placement domain. It does not decide where the distribution is located.",
+    "uniform means approximately even spacing, not necessarily a literal grid. random means irregular stochastic placement without strong clustering. clustered means local groups separated by relatively sparse space.",
+    "population.density_profile describes spatial variation of density and is orthogonal to arrangement. A distribution may therefore be clustered while also becoming denser along a gradient.",
+    "The gradient profile is qualitative and continuous in semantic intent. Exact interpolation, thresholds, coordinates, and sampling algorithms are backend-defined.",
+    "A gradient SpatialSelector identifies a qualitative locus within the Distribution placement domain. selector anchor=west means the world-west side of that domain; direction_of(target=forest, west) instead means a locus west of the forest and must not be used as shorthand for the forest interior west side.",
+    "If density_profile is present, amount.mode=count may still provide a total instance budget. amount.mode=density is mutually exclusive with density_profile. When an edit changes a uniform/global qualitative density into a spatial gradient, replacing amount.mode=density with density_profile is the requested density change and is not a preservation violation.",
+    "inside, near, far_from, along, and direction_of are shared placement relations rather than primitive-specific fields.",
+    "near and far_from remain qualitative. Numeric distance/spacing is intentionally outside V2 until a real use case requires it.",
+    "Do not encode stylistic labels such as natural, eerie, civilized, or wild directly in the IR when they can be semantically lowered into placement/population structure.",
+    "Do not invent fields, relation types, arrangement types, profile types, selector types, or enum values absent from this specification.",
+    "If a user intent still cannot be represented without losing an essential semantic constraint, return an IR capability gap rather than silently approximating it."
+  ],
+  "migration_from_v1": {
+    "location": "Move to placement.anchor.",
+    "relations": "Move to placement.relations without changing relation objects.",
+    "network_from_to_via": "Move Network from/to/via into topology.{from,to,via}.",
+    "distribution_count": "Move to population.amount as {\"mode\": \"count\", \"value\": <old_count>}.",
+    "distribution_density": "Move to population.amount as {\"mode\": \"density\", \"value\": <old_density>}.",
+    "count_and_density_together": "V2 amount has one authoritative mode. If a V1 Distribution contains both count and density, resolve the intended authority explicitly rather than migrating both automatically.",
+    "new_arrangement": "Use population.arrangement only when the user/world state specifies an arrangement semantic. Omitted does not mean uniform.",
+    "new_density_profile": "Use population.density_profile for explicit spatial density variation such as a continuous low-to-high gradient."
+  }
+}

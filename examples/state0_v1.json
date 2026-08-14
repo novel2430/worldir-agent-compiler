@@ -1,0 +1,59 @@
+{
+  "regions": [
+    {
+      "id": "coast",
+      "type": "coast",
+      "location": "east"
+    },
+    {
+      "id": "forest",
+      "type": "forest",
+      "location": "west"
+    }
+  ],
+  "networks": [
+    {
+      "id": "main_road",
+      "type": "road",
+      "from": "south",
+      "to": "north"
+    }
+  ],
+  "entities": [
+    {
+      "id": "church",
+      "type": "church",
+      "location": "north",
+      "relations": [
+        {
+          "type": "near",
+          "target": "main_road"
+        }
+      ]
+    }
+  ],
+  "distributions": [
+    {
+      "id": "houses",
+      "type": "house",
+      "count": 12,
+      "relations": [
+        {
+          "type": "along",
+          "target": "main_road"
+        }
+      ]
+    },
+    {
+      "id": "trees",
+      "type": "tree",
+      "density": "high",
+      "relations": [
+        {
+          "type": "inside",
+          "target": "forest"
+        }
+      ]
+    }
+  ]
+}

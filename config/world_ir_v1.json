@@ -1,0 +1,176 @@
+{
+  "version": "World IR V1",
+  "root_collections": {
+    "regions": "Region",
+    "networks": "Network",
+    "entities": "Entity",
+    "distributions": "Distribution"
+  },
+  "anchors": [
+    "north",
+    "south",
+    "east",
+    "west",
+    "center",
+    "northwest",
+    "northeast",
+    "southwest",
+    "southeast",
+    "whole"
+  ],
+  "relation_directions": [
+    "north",
+    "south",
+    "east",
+    "west",
+    "northwest",
+    "northeast",
+    "southwest",
+    "southeast"
+  ],
+  "relation_types": {
+    "inside": {
+      "required": ["type", "target"],
+      "optional": [],
+      "allowed_sources": ["Region", "Entity", "Distribution"],
+      "allowed_targets": ["Region"],
+      "symmetric": false,
+      "description": "The source is spatially contained within the target Region."
+    },
+    "near": {
+      "required": ["type", "target"],
+      "optional": [],
+      "allowed_sources": ["Region", "Entity", "Distribution"],
+      "allowed_targets": ["Region", "Network", "Entity", "Distribution"],
+      "symmetric": true,
+      "description": "The source should be spatially close to the target. This is qualitative; exact distance is backend-defined."
+    },
+    "far_from": {
+      "required": ["type", "target"],
+      "optional": [],
+      "allowed_sources": ["Region", "Entity", "Distribution"],
+      "allowed_targets": ["Region", "Network", "Entity", "Distribution"],
+      "symmetric": true,
+      "description": "The source should maintain clear spatial separation from the target. This is qualitative; exact distance is backend-defined."
+    },
+    "along": {
+      "required": ["type", "target"],
+      "optional": [],
+      "allowed_sources": ["Entity", "Distribution"],
+      "allowed_targets": ["Network"],
+      "symmetric": false,
+      "description": "The source is placed or distributed along the target Network."
+    },
+    "direction_of": {
+      "required": ["type", "target", "direction"],
+      "optional": [],
+      "allowed_sources": ["Region", "Entity", "Distribution"],
+      "allowed_targets": ["Region", "Network", "Entity", "Distribution"],
+      "symmetric": false,
+      "direction_values": [
+        "north",
+        "south",
+        "east",
+        "west",
+        "northwest",
+        "northeast",
+        "southwest",
+        "southeast"
+      ],
+      "description": "The source lies in the specified qualitative direction relative to the target."
+    }
+  },
+  "primitives": {
+    "Region": {
+      "required": ["id", "type"],
+      "optional": ["location", "relations"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "string"},
+        "location": {"kind": "anchor"},
+        "relations": {"kind": "relation_list"}
+      }
+    },
+    "Network": {
+      "required": ["id", "type", "from", "to"],
+      "optional": ["via"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "enum", "values": ["road", "path"]},
+        "from": {"kind": "anchor_or_ref"},
+        "to": {"kind": "anchor_or_ref"},
+        "via": {"kind": "ref_list"}
+      }
+    },
+    "Entity": {
+      "required": ["id", "type"],
+      "optional": ["location", "relations"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "string"},
+        "location": {"kind": "anchor"},
+        "relations": {"kind": "relation_list"}
+      }
+    },
+    "Distribution": {
+      "required": ["id", "type"],
+      "optional": ["count", "density", "relations"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "string"},
+        "count": {"kind": "integer_nonnegative"},
+        "density": {"kind": "enum", "values": ["low", "medium", "high"]},
+        "relations": {"kind": "relation_list"}
+      }
+    }
+  },
+  "relation_object_schema": {
+    "base_required": ["type", "target"],
+    "base_optional": ["direction"],
+    "fields": {
+      "type": {
+        "kind": "enum",
+        "values": ["inside", "near", "far_from", "along", "direction_of"]
+      },
+      "target": {"kind": "ref"},
+      "direction": {
+        "kind": "enum",
+        "values": [
+          "north",
+          "south",
+          "east",
+          "west",
+          "northwest",
+          "northeast",
+          "southwest",
+          "southeast"
+        ]
+      }
+    }
+  },
+  "semantic_notes": [
+    "World IR expresses backend-independent, high-level world semantics, not exact coordinates, meshes, assets, collision shapes, or engine-specific placement instructions.",
+    "location is an optional absolute position relative to the world frame. relations[] expresses object-to-object spatial relations.",
+    "Region.location is optional in V1; a Region may instead be located entirely through relations such as direction_of another object.",
+    "inside, near, and along from V0 are represented only through relations[] in V1. Do not emit the legacy primitive fields inside/near/along.",
+    "buffer is removed in V1 because its semantics were ambiguous. Use far_from for qualitative separation; numeric spacing or distance is intentionally outside V1 for now.",
+    "Multiple relations on the same source are conjunctive: the backend should attempt to satisfy all of them together.",
+    "near and far_from are qualitative relations. Their exact geometric thresholds are backend-defined.",
+    "direction_of is object-relative. location remains world-relative.",
+    "Network from/to/via remain explicit topology fields and are not migrated into relations[].",
+    "count and density remain intrinsic Distribution attributes and are not relations.",
+    "Relation targets must reference existing object ids, and relation source/target primitive types should follow relation_types compatibility rules.",
+    "A symmetric relation such as near or far_from does not need to be duplicated on both objects; one declaration is sufficient semantic input.",
+    "Do not invent relation types, relation fields, primitive fields, or direction values absent from this specification.",
+    "If a user intent cannot be represented without inventing new relations or losing an essential semantic constraint, report an IR capability gap rather than silently approximating it."
+  ],
+  "migration_from_v0": {
+    "inside": "Move to relations[] as {\"type\": \"inside\", \"target\": <old_value>}.",
+    "near": "Move to relations[] as {\"type\": \"near\", \"target\": <old_value>}.",
+    "along": "Move to relations[] as {\"type\": \"along\", \"target\": <old_value>}.",
+    "location": "Keep as an optional primitive field.",
+    "from_to_via": "Keep on Network.",
+    "count_density": "Keep on Distribution.",
+    "buffer": "Remove; do not migrate automatically because V0 buffer semantics were ambiguous."
+  }
+}

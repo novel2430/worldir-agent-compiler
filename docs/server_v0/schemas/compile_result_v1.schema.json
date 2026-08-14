@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldir.local/schema/compile_result_v1.schema.json",
+  "title": "WorldIR CompileResult V1",
+  "oneOf": [
+    {"$ref": "#/$defs/ok_result"},
+    {"$ref": "#/$defs/ir_gap_result"}
+  ],
+  "$defs": {
+    "runtime_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ir_object_id", "runtime_fact_id", "placement"],
+      "properties": {
+        "ir_object_id": {"type": "string", "minLength": 1},
+        "runtime_fact_id": {"type": "string", "minLength": 1},
+        "placement": {
+          "type": "string",
+          "enum": ["at", "inside", "near"]
+        }
+      }
+    },
+    "runtime_fact_op": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "runtime_fact_id"],
+      "properties": {
+        "op": {"const": "clear"},
+        "runtime_fact_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "mode"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1},
+        "mode": {
+          "type": "string",
+          "enum": ["initial", "edit"]
+        },
+        "route": {
+          "type": "string",
+          "enum": ["bypass", "deliberate"]
+        }
+      }
+    },
+    "ok_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "world_ir",
+        "runtime_bindings",
+        "runtime_fact_ops",
+        "meta"
+      ],
+      "properties": {
+        "status": {"const": "ok"},
+        "world_ir": {"type": "object"},
+        "runtime_bindings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/runtime_binding"}
+        },
+        "runtime_fact_ops": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/runtime_fact_op"}
+        },
+        "meta": {"$ref": "#/$defs/meta"}
+      }
+    },
+    "ir_gap_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "gap", "meta"],
+      "properties": {
+        "status": {"const": "ir_gap"},
+        "gap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason", "unsupported"],
+          "properties": {
+            "reason": {"type": "string", "minLength": 1},
+            "unsupported": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          }
+        },
+        "meta": {"$ref": "#/$defs/meta"}
+      }
+    }
+  }
+}

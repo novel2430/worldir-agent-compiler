@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldir.local/schema/runtime_context_v1.schema.json",
+  "title": "WorldIR Runtime Context V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "facts"],
+  "properties": {
+    "version": {"const": "1"},
+    "facts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/runtime_fact"}
+    }
+  },
+  "$defs": {
+    "anchor": {
+      "type": "string",
+      "enum": [
+        "north", "south", "east", "west", "center",
+        "northwest", "northeast", "southwest", "southeast", "whole"
+      ]
+    },
+    "semantic_location": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "anchor": {"$ref": "#/$defs/anchor"},
+        "inside": {"type": "string", "minLength": 1},
+        "near": {"type": "string", "minLength": 1}
+      }
+    },
+    "added_object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "object_type"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"const": "added_object"},
+        "object_type": {"type": "string", "minLength": 1},
+        "location": {"$ref": "#/$defs/semantic_location"}
+      }
+    },
+    "removed_object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "object_type"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"const": "removed_object"},
+        "object_type": {"type": "string", "minLength": 1},
+        "location": {"$ref": "#/$defs/semantic_location"}
+      }
+    },
+    "object_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "target", "state"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"const": "object_state"},
+        "target": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1}
+      }
+    },
+    "marked_area": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "mark", "location"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"const": "marked_area"},
+        "mark": {
+          "type": "string",
+          "enum": ["cleared", "burned"]
+        },
+        "location": {"$ref": "#/$defs/semantic_location"},
+        "affected_type": {"type": "string", "minLength": 1},
+        "count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "runtime_fact": {
+      "oneOf": [
+        {"$ref": "#/$defs/added_object"},
+        {"$ref": "#/$defs/removed_object"},
+        {"$ref": "#/$defs/object_state"},
+        {"$ref": "#/$defs/marked_area"}
+      ]
+    }
+  }
+}

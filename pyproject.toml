@@ -1,0 +1,9 @@
+[project]
+name = "worldir-agent-compiler"
+version = "0.2.0"
+description = "Small LLM-agent workflow for compiling natural-language world edits into World IR V0"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+worldir-agent = "worldir_agent.cli:main"

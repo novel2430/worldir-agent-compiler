@@ -1,0 +1,16 @@
+{
+  "regions": [
+    {"id": "coast", "type": "coast", "location": "east"},
+    {"id": "forest", "type": "forest", "location": "west"}
+  ],
+  "networks": [
+    {"id": "main_road", "type": "road", "from": "south", "to": "north"}
+  ],
+  "entities": [
+    {"id": "church", "type": "church", "location": "north", "near": "main_road"}
+  ],
+  "distributions": [
+    {"id": "houses", "type": "house", "along": "main_road", "count": 12},
+    {"id": "trees", "type": "tree", "inside": "forest", "density": "high"}
+  ]
+}

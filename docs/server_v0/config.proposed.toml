@@ -1,0 +1,41 @@
+# DESIGN-ONLY CONFIGURATION EXAMPLE.
+# This file is not used by the current implementation.
+
+[server]
+host = "127.0.0.1"
+port = 8787
+log_level = "info"
+
+[llm]
+provider = "openai_compatible"
+base_url = "https://api.deepseek.com/v1"
+model = "deepseek-v4-flash"
+api_key_env = "DEEPSEEK_API_KEY"
+temperature = 0.0
+max_tokens = 32768
+timeout_seconds = 90
+
+[workflow]
+use_planner_checker = false
+planner_max_attempts = 3
+editor_max_attempts = 3
+initial_max_attempts = 3
+json_repair_max_attempts = 1
+
+[ir]
+version = "2"
+spec = "config/world_ir_v2.json"
+semantics = "config/world_ir_v2_semantics.md"
+
+[runtime]
+context_version = "1"
+
+[prompts]
+dir = "prompts"
+runtime_semantics = "prompts/common/runtime_semantics.md"
+
+[trace]
+enabled = true
+dir = "runs"
+store_prompts = true
+store_raw_responses = true

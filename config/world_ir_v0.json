@@ -1,0 +1,70 @@
+{
+  "version": "World IR V0",
+  "root_collections": {
+    "regions": "Region",
+    "networks": "Network",
+    "entities": "Entity",
+    "distributions": "Distribution"
+  },
+  "anchors": [
+    "north", "south", "east", "west", "center",
+    "northwest", "northeast", "southwest", "southeast", "whole"
+  ],
+  "primitives": {
+    "Region": {
+      "required": ["id", "type", "location"],
+      "optional": [],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "string"},
+        "location": {"kind": "anchor"}
+      }
+    },
+    "Network": {
+      "required": ["id", "type", "from", "to"],
+      "optional": ["via"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "enum", "values": ["road", "path"]},
+        "from": {"kind": "anchor_or_ref"},
+        "to": {"kind": "anchor_or_ref"},
+        "via": {"kind": "ref_list"}
+      }
+    },
+    "Entity": {
+      "required": ["id", "type"],
+      "optional": ["location", "inside", "near"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "string"},
+        "location": {"kind": "anchor"},
+        "inside": {"kind": "ref"},
+        "near": {"kind": "ref"}
+      }
+    },
+    "Distribution": {
+      "required": ["id", "type"],
+      "optional": ["inside", "along", "near", "count", "density", "buffer"],
+      "fields": {
+        "id": {"kind": "string"},
+        "type": {"kind": "string"},
+        "inside": {"kind": "ref"},
+        "along": {"kind": "ref"},
+        "near": {"kind": "ref"},
+        "count": {"kind": "integer_nonnegative"},
+        "density": {"kind": "enum", "values": ["low", "medium", "high"]},
+        "buffer": {
+          "kind": "scalar",
+          "description": "A backend-interpreted clearance/buffer scalar. It is not a direction, density, or qualitative style field."
+        }
+      }
+    }
+  },
+  "semantic_notes": [
+    "World IR expresses high-level world semantics, not exact coordinates, meshes, assets, or collision shapes.",
+    "Distribution is for repeated objects; Entity is for a small number of semantically important objects.",
+    "inside/near/along/via references must point to existing object ids.",
+    "Do not invent fields that are absent from this specification.",
+    "If a user intent cannot be represented without inventing fields or losing an essential relation, report an IR capability gap rather than silently approximating it."
+  ]
+}
