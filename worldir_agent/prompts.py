@@ -13,3 +13,6 @@ class PromptStore:
         for key, value in values.items():
             text = text.replace("{{" + key + "}}", value)
         return text
+
+    def read(self, name: str) -> str:
+        return (self.prompts_dir / f"{name}.md").read_text(encoding="utf-8").strip()

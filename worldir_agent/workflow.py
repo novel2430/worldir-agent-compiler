@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
+
+from pydantic import ValidationError
 
 from .config import WorkflowConfig
 from .json_utils import parse_json_object, pretty_json
 from .llm import LLM
 from .prompts import PromptStore
+from .runtime.models import CompileDraft, RuntimeContext
+from .runtime.validator import RuntimeContractValidator
 from .schema import IRSpec, IRValidator
 from .trace import RunTrace, TraceEvent
 
@@ -22,6 +26,8 @@ class WorkflowResult:
     ir: dict[str, Any] | None
     detail: dict[str, Any]
     trace: RunTrace
+    runtime_bindings: list[dict[str, Any]] = field(default_factory=list)
+    runtime_fact_ops: list[dict[str, Any]] = field(default_factory=list)
 
 
 class WorldIRWorkflow:
@@ -32,13 +38,16 @@ class WorldIRWorkflow:
         spec: IRSpec,
         config: WorkflowConfig,
         route_override: str = "auto",
+        runtime_semantics: str | None = None,
     ):
         self.llm = llm
         self.prompts = prompts
         self.spec = spec
         self.validator = IRValidator(spec)
+        self.runtime_validator = RuntimeContractValidator()
         self.config = config
         self.route_override = route_override
+        self.runtime_semantics = runtime_semantics
         self.last_trace: RunTrace | None = None
 
     def _render_ir_prompt(self, name: str, **values: str) -> str:
@@ -50,10 +59,43 @@ class WorldIRWorkflow:
             **values,
         )
 
-    def run(self, user_prompt: str, current_ir: dict[str, Any] | None = None) -> WorkflowResult:
+    def _render_edit_prompt(
+        self,
+        name: str,
+        runtime_context: RuntimeContext,
+        **values: str,
+    ) -> str:
+        return self._render_ir_prompt(
+            name,
+            RUNTIME_SEMANTICS=(
+                self.runtime_semantics
+                if self.runtime_semantics is not None
+                else self.prompts.read("common/runtime_semantics")
+            ),
+            RUNTIME_CONTEXT_JSON=pretty_json(
+                runtime_context.model_dump(mode="json", exclude_none=True)
+            ),
+            **values,
+        )
+
+    def run(
+        self,
+        user_prompt: str,
+        current_ir: dict[str, Any] | None = None,
+        runtime_context: dict[str, Any] | None = None,
+    ) -> WorkflowResult:
         if current_ir is None:
             return self._run_initial(user_prompt)
-        return self._run_edit(user_prompt, current_ir)
+        require_compile_draft = runtime_context is not None
+        context = RuntimeContext.model_validate(
+            runtime_context or {"version": "1", "facts": []}
+        )
+        return self._run_edit(
+            user_prompt,
+            current_ir,
+            context,
+            require_compile_draft=require_compile_draft,
+        )
 
     def _call_json(self, trace: RunTrace, node: str, prompt: str, attempt: int = 1) -> dict[str, Any]:
         current_prompt = prompt
@@ -120,6 +162,12 @@ class WorldIRWorkflow:
             )
             candidate = self._call_json(trace, "initial_translator", prompt, attempt)
             local = self.validator.validate(candidate)
+            trace.add_validation(
+                layer="world_ir",
+                attempt=attempt,
+                valid=local.valid,
+                issues=local.issues,
+            )
             if local.valid:
                 return WorkflowResult("ok", candidate, {"mode": "initial"}, trace)
             feedback = "\n".join(f"- {x}" for x in local.issues)
@@ -130,10 +178,23 @@ class WorldIRWorkflow:
             trace,
         )
 
-    def _run_edit(self, user_prompt: str, current_ir: dict[str, Any]) -> WorkflowResult:
+    def _run_edit(
+        self,
+        user_prompt: str,
+        current_ir: dict[str, Any],
+        runtime_context: RuntimeContext,
+        *,
+        require_compile_draft: bool,
+    ) -> WorkflowResult:
         trace = RunTrace(mode="edit")
         self.last_trace = trace
         current_validation = self.validator.validate(current_ir)
+        trace.add_validation(
+            layer="current_world_ir",
+            attempt=1,
+            valid=current_validation.valid,
+            issues=current_validation.issues,
+        )
         if not current_validation.valid:
             return WorkflowResult(
                 "invalid_current_state",
@@ -145,8 +206,9 @@ class WorldIRWorkflow:
         route = self.route_override
         router_output: dict[str, Any] = {"route": route}
         if route == "auto":
-            prompt = self._render_ir_prompt(
+            prompt = self._render_edit_prompt(
                 "router",
+                runtime_context,
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
             )
@@ -163,7 +225,12 @@ class WorldIRWorkflow:
                 "preserve_unspecified_state": True,
             }
         else:
-            semantic_intent = self._planner_loop(trace, user_prompt, current_ir)
+            semantic_intent = self._planner_loop(
+                trace,
+                user_prompt,
+                current_ir,
+                runtime_context,
+            )
             if semantic_intent is None:
                 return WorkflowResult(
                     "planning_failed",
@@ -172,8 +239,9 @@ class WorldIRWorkflow:
                     trace,
                 )
 
-        express_prompt = self._render_ir_prompt(
+        express_prompt = self._render_edit_prompt(
             "expressibility",
+            runtime_context,
             CURRENT_IR=pretty_json(current_ir),
             USER_PROMPT=user_prompt,
             SEMANTIC_INTENT=pretty_json(semantic_intent),
@@ -194,28 +262,79 @@ class WorldIRWorkflow:
 
         editor_feedback = "None"
         for attempt in range(1, self.config.editor_max_attempts + 1):
-            editor_prompt = self._render_ir_prompt(
+            editor_prompt = self._render_edit_prompt(
                 "editor",
+                runtime_context,
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
                 SEMANTIC_INTENT=pretty_json(semantic_intent),
                 VALIDATION_FEEDBACK=editor_feedback,
             )
-            candidate = self._call_json(trace, "editor", editor_prompt, attempt)
+            editor_output = self._call_json(trace, "editor", editor_prompt, attempt)
+            draft, draft_issues = self._parse_compile_draft(
+                editor_output,
+                require_compile_draft=require_compile_draft,
+            )
+            if draft is None:
+                trace.add_validation(
+                    layer="compile_draft",
+                    attempt=attempt,
+                    valid=False,
+                    issues=draft_issues,
+                )
+                editor_feedback = "Compile Draft contract errors:\n" + "\n".join(
+                    f"- {issue}" for issue in draft_issues
+                )
+                continue
+            trace.add_validation(
+                layer="compile_draft",
+                attempt=attempt,
+                valid=True,
+                issues=[],
+            )
+
+            candidate = draft.world_ir
             local = self.validator.validate(candidate)
+            trace.add_validation(
+                layer="world_ir",
+                attempt=attempt,
+                valid=local.valid,
+                issues=local.issues,
+            )
             if not local.valid:
                 editor_feedback = "Local schema/reference errors:\n" + "\n".join(f"- {x}" for x in local.issues)
                 continue
 
-            validator_prompt = self._render_ir_prompt(
+            runtime_validation = self.runtime_validator.validate(draft, runtime_context)
+            trace.add_validation(
+                layer="runtime_contract",
+                attempt=attempt,
+                valid=runtime_validation.valid,
+                issues=runtime_validation.issues,
+            )
+            if not runtime_validation.valid:
+                editor_feedback = "Runtime contract errors:\n" + "\n".join(
+                    f"- {issue}" for issue in runtime_validation.issues
+                )
+                continue
+
+            validator_prompt = self._render_edit_prompt(
                 "ir_validator",
+                runtime_context,
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
                 SEMANTIC_INTENT=pretty_json(semantic_intent),
-                CANDIDATE_IR=pretty_json(candidate),
+                CANDIDATE_DRAFT=pretty_json(draft.model_dump(mode="json")),
             )
             verdict = self._call_json(trace, "ir_validator", validator_prompt, attempt)
-            if bool(verdict.get("valid")):
+            semantic_valid = bool(verdict.get("valid"))
+            trace.add_validation(
+                layer="semantic",
+                attempt=attempt,
+                valid=semantic_valid,
+                issues=verdict.get("issues") or verdict.get("critique") or [],
+            )
+            if semantic_valid:
                 return WorkflowResult(
                     "ok",
                     candidate,
@@ -227,6 +346,14 @@ class WorldIRWorkflow:
                         "expressibility": express,
                     },
                     trace,
+                    runtime_bindings=[
+                        binding.model_dump(mode="json")
+                        for binding in draft.runtime_bindings
+                    ],
+                    runtime_fact_ops=[
+                        operation.model_dump(mode="json")
+                        for operation in draft.runtime_fact_ops
+                    ],
                 )
             editor_feedback = str(verdict.get("critique") or verdict.get("issues") or "Validator rejected the candidate IR")
 
@@ -241,12 +368,38 @@ class WorldIRWorkflow:
             trace,
         )
 
-    def _planner_loop(self, trace: RunTrace, user_prompt: str, current_ir: dict[str, Any]) -> dict[str, Any] | None:
+    def _parse_compile_draft(
+        self,
+        editor_output: dict[str, Any],
+        *,
+        require_compile_draft: bool,
+    ) -> tuple[CompileDraft | None, list[str]]:
+        try:
+            return CompileDraft.model_validate(editor_output), []
+        except ValidationError as exc:
+            # Preserve the pre-server CLI/test contract for calls that do not
+            # supply Runtime Context. The Server path always requires a draft.
+            if not require_compile_draft and set(editor_output) == set(self.spec.data["root_collections"]):
+                return CompileDraft(
+                    world_ir=editor_output,
+                    runtime_bindings=[],
+                    runtime_fact_ops=[],
+                ), []
+            return None, [error["msg"] for error in exc.errors()]
+
+    def _planner_loop(
+        self,
+        trace: RunTrace,
+        user_prompt: str,
+        current_ir: dict[str, Any],
+        runtime_context: RuntimeContext,
+    ) -> dict[str, Any] | None:
         # Default experimental path: one Planner pass, then continue directly to
         # expressibility checking. The subjective Planner Checker is optional.
         if not self.config.use_planner_checker:
-            planner_prompt = self._render_ir_prompt(
+            planner_prompt = self._render_edit_prompt(
                 "planner",
+                runtime_context,
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
                 CHECKER_FEEDBACK="None",
@@ -255,16 +408,18 @@ class WorldIRWorkflow:
 
         critique = "None"
         for attempt in range(1, self.config.planner_max_attempts + 1):
-            planner_prompt = self._render_ir_prompt(
+            planner_prompt = self._render_edit_prompt(
                 "planner",
+                runtime_context,
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
                 CHECKER_FEEDBACK=critique,
             )
             plan = self._call_json(trace, "planner", planner_prompt, attempt)
 
-            checker_prompt = self._render_ir_prompt(
+            checker_prompt = self._render_edit_prompt(
                 "planner_checker",
+                runtime_context,
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
                 PLAN=pretty_json(plan),
