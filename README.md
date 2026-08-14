@@ -38,7 +38,36 @@ Router
 
 重点不是把它做成一个完整 Agent Framework，而是**方便反复改 Prompt、改 IR、换模型、跑 Case，然后看每个 pass 到底发生什么**。
 
-项目目前只有 Python 标准库依赖。
+Compiler core 保持轻量；Server V0 另外使用 FastAPI、Pydantic v2 和 Uvicorn。
+
+---
+
+## Server V0
+
+Server V0 是本地 sidecar HTTP 服务，按 `docs/server_v0/LLM_COMPILER_SERVER_V0_DESIGN.md` 暴露：
+
+```text
+POST /v1/compile
+GET  /health
+GET  /info
+```
+
+准备配置并启动：
+
+```bash
+cp config/config.example.toml config/config.toml
+export DEEPSEEK_API_KEY='你的 key'
+uv sync
+uv run worldir-agent-server --config config/config.toml
+```
+
+也可以直接运行模块：
+
+```bash
+uv run python -m worldir_agent.server --config config/config.toml
+```
+
+服务默认监听 `127.0.0.1:8787`。Server 使用 World IR V2、Runtime Context V1 和 Compile Result V1；它不保存 world session，调用方必须在每次编译时传入 Current World IR 与 Runtime Context。
 
 ---
 
@@ -175,13 +204,16 @@ parsed_response
 
 ```text
 prompts/
+├── common/
+│   └── runtime_semantics.md
 ├── initial_translator.md
 ├── router.md
 ├── planner.md
 ├── planner_checker.md
 ├── expressibility.md
 ├── editor.md
-└── ir_validator.md
+├── ir_validator.md
+└── json_repair.md
 ```
 
 Workflow code 只负责：

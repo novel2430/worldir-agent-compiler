@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
 
@@ -27,9 +27,47 @@ class WorkflowConfig:
 
 
 @dataclass(slots=True)
+class ServerConfig:
+    host: str = "127.0.0.1"
+    port: int = 8787
+    log_level: str = "info"
+
+
+@dataclass(slots=True)
+class IRConfig:
+    version: str = "2"
+    spec: str = "config/world_ir_v2.json"
+    semantics: str = "config/world_ir_v2_semantics.md"
+
+
+@dataclass(slots=True)
+class RuntimeConfig:
+    context_version: str = "1"
+
+
+@dataclass(slots=True)
+class PromptsConfig:
+    dir: str = "prompts"
+    runtime_semantics: str = "prompts/common/runtime_semantics.md"
+
+
+@dataclass(slots=True)
+class TraceConfig:
+    enabled: bool = True
+    dir: str = "runs"
+    store_prompts: bool = True
+    store_raw_responses: bool = True
+
+
+@dataclass(slots=True)
 class AppConfig:
     llm: LLMConfig
     workflow: WorkflowConfig
+    server: ServerConfig = field(default_factory=ServerConfig)
+    ir: IRConfig = field(default_factory=IRConfig)
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+    prompts: PromptsConfig = field(default_factory=PromptsConfig)
+    trace: TraceConfig = field(default_factory=TraceConfig)
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -38,4 +76,17 @@ def load_config(path: str | Path) -> AppConfig:
         data = tomllib.load(f)
     llm = LLMConfig(**data["llm"])
     workflow = WorkflowConfig(**data.get("workflow", {}))
-    return AppConfig(llm=llm, workflow=workflow)
+    server = ServerConfig(**data.get("server", {}))
+    ir = IRConfig(**data.get("ir", {}))
+    runtime = RuntimeConfig(**data.get("runtime", {}))
+    prompts = PromptsConfig(**data.get("prompts", {}))
+    trace = TraceConfig(**data.get("trace", {}))
+    return AppConfig(
+        llm=llm,
+        workflow=workflow,
+        server=server,
+        ir=ir,
+        runtime=runtime,
+        prompts=prompts,
+        trace=trace,
+    )

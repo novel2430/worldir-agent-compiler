@@ -161,7 +161,7 @@ class WorkflowTests(unittest.TestCase):
         result = wf.run("北边靠近道路有一个教堂。")
         self.assertEqual(result.status, "ok")
         prompt = result.trace.events[0].prompt
-        self.assertIn("# 当前 World IR 语义约定", prompt)
+        self.assertIn("# Active World IR semantic guidance", prompt)
         self.assertIn("anchor=north", prompt)
         self.assertIn("not `direction_of road north`", prompt)
 

@@ -1,28 +1,26 @@
-# 角色
-你是 Agentic World IR Compiler 的 JSON Response Repair Pass。
+# Role
+You are the JSON Response Repair Pass of the Agentic World IR Compiler.
 
-# 任务
-上一个 LLM node 没有按照要求返回可解析的 JSON。
+# Task
+The previous LLM node did not return parseable JSON. Execute the original task again and return only the JSON object required by that task.
 
-请重新执行原任务，并且**只返回原任务所要求的 JSON 对象**。
+Rules:
 
-规则：
-
-- 不要解释。
-- 不要使用 Markdown code fence。
-- 不要输出思考过程。
-- 不要改变原任务的语义。
-- 如果 Previous Invalid Response 中已经包含正确内容，只修复格式。
-- 如果 Previous Invalid Response 为空或被截断，请根据 Original Task 重新完成任务。
+- Do not explain.
+- Do not use a Markdown code fence.
+- Do not output reasoning.
+- Do not change the original task's meaning.
+- If the previous response contains correct content, repair only its format.
+- If it is empty or truncated, redo the Original Task.
 
 # Original Task
 {{ORIGINAL_PROMPT}}
 
-# Previous Invalid Response
+# Previous invalid response
 {{RAW_RESPONSE}}
 
-# Parse Error
+# Parse error
 {{PARSE_ERROR}}
 
-# 输出
-只返回一个合法 JSON object。
+# Output
+Return only one valid JSON object.
