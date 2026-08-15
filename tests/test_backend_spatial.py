@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from worldir_agent.backend.models import SpatialPlanRequest
 from worldir_agent.backend.spatial_lowerer import SpatialLowerer, SpatialLoweringInvalidIR
 from worldir_agent.demo.mock_compiler import MOCK_WORLD_IR, MockWorldCompiler
+from worldir_agent.demo.llm_intent import LLMDemoIntentInterpreter
+from worldir_agent.demo.mock_intent import DemoInterpretRequest
 from worldir_agent.demo.models import (
     FuturePolicyV0,
     PersistentClimateHistoryV0,
@@ -20,6 +22,16 @@ from worldir_agent.server.app import create_app
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class IntentLLM:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def complete(self, node, prompt):
+        self.calls.append((node, prompt))
+        return self.responses.pop(0)
 
 
 def request_for(ir=None, evolution=None):
@@ -167,6 +179,52 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(history["action"], "add_history")
         self.assertNotIn("history_event", future)
         self.assertNotIn("future_policy", history)
+
+
+class RealIntentInterpreterContractTests(unittest.TestCase):
+    def request(self, prompt):
+        return DemoInterpretRequest.model_validate({
+            "prompt": prompt,
+            "current_ir": MOCK_WORLD_IR,
+            "evolution_state": {"version": "0", "history": []},
+            "current_chunk_coord": [-1, 0],
+            "frontier_coord": [1, 0],
+        })
+
+    def interpreter(self, responses):
+        return LLMDemoIntentInterpreter(
+            IntentLLM(responses), ROOT / "prompts/demo_intent.md"
+        )
+
+    def test_natural_future_variant_is_validated_and_server_owned(self):
+        result = self.interpreter([
+            '{"action":"set_future_policy","environment":"research_base"}'
+        ]).interpret(self.request("前面的世界从现在开始变成废弃研究基地。"))
+        self.assertEqual(result.action, "set_future_policy")
+        self.assertEqual(result.future_policy.created_at_frontier, [1, 0])
+        self.assertEqual(result.future_policy.id, "future_policy_001")
+
+    def test_natural_history_variant_is_validated_and_server_owned(self):
+        result = self.interpreter([
+            '{"action":"add_history","kind":"persistent_climate",'
+            '"effect":"snow","since_years_ago":10}'
+        ]).interpret(self.request("假设这里十年前就开始下雪，而且从未停止。"))
+        self.assertEqual(result.action, "add_history")
+        self.assertEqual(result.history_event.effect, "snow")
+        self.assertEqual(result.history_event.sequence, 1)
+
+    def test_malformed_first_response_gets_one_repair(self):
+        llm = IntentLLM([
+            "not json",
+            '{"action":"compile_world"}',
+        ])
+        result = LLMDemoIntentInterpreter(
+            llm, ROOT / "prompts/demo_intent.md"
+        ).interpret(self.request("让森林里的树再茂密一点。"))
+        self.assertEqual(result.action, "compile_world")
+        self.assertEqual([call[0] for call in llm.calls], [
+            "demo_intent", "demo_intent_repair"
+        ])
 
 
 if __name__ == "__main__":

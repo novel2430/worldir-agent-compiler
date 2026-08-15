@@ -46,6 +46,10 @@ from ..demo.mock_intent import (
     DemoInterpretResult,
     interpret_demo_prompt,
 )
+from ..demo.llm_intent import (
+    DemoIntentInterpreterProtocol,
+    DemoIntentValidationError,
+)
 
 
 class CompilerProtocol(Protocol):
@@ -128,6 +132,7 @@ def create_app(
     compile_cache: CompileCache | None = None,
     spatial_lowerer: SpatialLowerer | None = None,
     enable_demo_intent: bool = False,
+    demo_intent_interpreter: DemoIntentInterpreterProtocol | None = None,
 ) -> FastAPI:
     app = FastAPI(title="WorldIR LLM Compiler Server", version="0.3.0")
     compiler_fingerprint = getattr(compiler, "fingerprint", "unspecified")
@@ -210,7 +215,7 @@ def create_app(
                 detail={"kind": "invalid_world_ir", "issues": exc.issues},
             ) from exc
 
-    if enable_demo_intent:
+    if enable_demo_intent or demo_intent_interpreter is not None:
         @app.post(
             "/v1/demo/interpret",
             response_model=DemoInterpretResult,
@@ -219,7 +224,25 @@ def create_app(
         def demo_interpret_endpoint(
             request: DemoInterpretRequest,
         ) -> DemoInterpretResult:
-            return interpret_demo_prompt(request)
+            try:
+                if demo_intent_interpreter is not None:
+                    return demo_intent_interpreter.interpret(request)
+                return interpret_demo_prompt(request)
+            except LLMTimeoutError as exc:
+                raise HTTPException(
+                    status_code=504,
+                    detail={"kind": "llm_timeout", "message": "Intent model timed out"},
+                ) from exc
+            except LLMProviderError as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"kind": "llm_http_error", "message": "Intent model request failed"},
+                ) from exc
+            except DemoIntentValidationError as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"kind": "malformed_llm_json", "message": str(exc)},
+                ) from exc
 
     @app.post(
         "/v1/compile",

@@ -22,6 +22,7 @@ class DemoInterpretRequest(StrictContractModel):
     current_ir: dict[str, Any] | None
     evolution_state: WorldEvolutionStateV0
     frontier_coord: Annotated[list[int], Field(min_length=2, max_length=2)]
+    current_chunk_coord: Annotated[list[int], Field(min_length=2, max_length=2)] | None = None
 
 
 class DemoInterpretResult(StrictContractModel):

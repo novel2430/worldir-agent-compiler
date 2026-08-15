@@ -8,6 +8,8 @@ from ..config import load_config
 from ..trace import ServerTraceWriter
 from .app import build_compiler, create_app
 from .cache import CompileCache
+from ..demo.llm_intent import LLMDemoIntentInterpreter
+from ..llm import HTTPJSONLLM
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
         compiler,
         trace_writer=ServerTraceWriter(config.trace),
         compile_cache=CompileCache(config.cache),
+        demo_intent_interpreter=LLMDemoIntentInterpreter(
+            HTTPJSONLLM(config.llm),
+            "prompts/demo_intent.md",
+        ),
     )
     uvicorn.run(
         app,
