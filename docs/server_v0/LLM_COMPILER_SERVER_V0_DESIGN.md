@@ -731,12 +731,16 @@ Returns active protocol/compiler information:
 {
   "compiler_version": "0.3.0",
   "world_ir_version": "2",
+  "world_catalog_version": "1",
   "runtime_context_version": "1",
   "compile_result_version": "1"
 }
 ```
 
-Useful for Godot startup/debug logs and protocol mismatch diagnosis.
+World IR and World Catalog are independently versioned contracts; Catalog V1
+supplies the active controlled vocabulary without becoming part of the World IR
+V2 type system. These fields are useful for Godot startup/debug logs and
+protocol mismatch diagnosis.
 
 ### No V0 endpoints for
 

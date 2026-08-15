@@ -258,7 +258,18 @@
               "value": "anchor"
             },
             "value": {
-              "kind": "anchor"
+              "kind": "enum",
+              "values": [
+                "north",
+                "south",
+                "east",
+                "west",
+                "center",
+                "northwest",
+                "northeast",
+                "southwest",
+                "southeast"
+              ]
             }
           }
         },
@@ -425,7 +436,7 @@
       ],
       "fields": {
         "id": {
-          "kind": "string"
+          "kind": "string_nonempty"
         },
         "type": {
           "kind": "string"
@@ -447,7 +458,7 @@
       ],
       "fields": {
         "id": {
-          "kind": "string"
+          "kind": "string_nonempty"
         },
         "type": {
           "kind": "enum",
@@ -476,7 +487,7 @@
       ],
       "fields": {
         "id": {
-          "kind": "string"
+          "kind": "string_nonempty"
         },
         "type": {
           "kind": "string"
@@ -498,7 +509,7 @@
       ],
       "fields": {
         "id": {
-          "kind": "string"
+          "kind": "string_nonempty"
         },
         "type": {
           "kind": "string"
@@ -524,6 +535,7 @@
     "uniform means approximately even spacing, not necessarily a literal grid. random means irregular stochastic placement without strong clustering. clustered means local groups separated by relatively sparse space.",
     "population.density_profile describes spatial variation of density and is orthogonal to arrangement. A distribution may therefore be clustered while also becoming denser along a gradient.",
     "The gradient profile is qualitative and continuous in semantic intent. Exact interpolation, thresholds, coordinates, and sampling algorithms are backend-defined.",
+    "placement.anchor may use whole, but a density-profile SpatialSelector anchor must identify a directional or local locus and therefore cannot use whole.",
     "A gradient SpatialSelector identifies a qualitative locus within the Distribution placement domain. selector anchor=west means the world-west side of that domain; direction_of(target=forest, west) instead means a locus west of the forest and must not be used as shorthand for the forest interior west side.",
     "If density_profile is present, amount.mode=count may still provide a total instance budget. amount.mode=density is mutually exclusive with density_profile. When an edit changes a uniform/global qualitative density into a spatial gradient, replacing amount.mode=density with density_profile is the requested density change and is not a preservation violation.",
     "inside, near, far_from, along, and direction_of are shared placement relations rather than primitive-specific fields.",

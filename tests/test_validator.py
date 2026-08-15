@@ -135,6 +135,24 @@ class V2ValidatorTests(unittest.TestCase):
         result = self.validator.validate(ir)
         self.assertTrue(result.valid, result.issues)
 
+    def test_placement_anchor_whole_remains_valid(self):
+        ir = copy.deepcopy(self.state0)
+        ir["regions"][0]["placement"] = {"anchor": "whole"}
+        result = self.validator.validate(ir)
+        self.assertTrue(result.valid, result.issues)
+
+    def test_all_primitive_ids_must_be_nonempty_strings(self):
+        for collection in ("regions", "networks", "entities", "distributions"):
+            with self.subTest(collection=collection):
+                ir = copy.deepcopy(self.state0)
+                ir[collection][0]["id"] = "   "
+                result = self.validator.validate(ir)
+                self.assertFalse(result.valid)
+                self.assertTrue(
+                    any(".id must be a non-empty string" in issue for issue in result.issues),
+                    result.issues,
+                )
+
     def test_network_topology_reference_is_checked(self):
         ir = copy.deepcopy(self.state0)
         ir["networks"][0]["topology"]["via"] = ["missing_place"]
@@ -278,6 +296,28 @@ class V2ValidatorTests(unittest.TestCase):
         result = self.validator.validate(ir)
         self.assertFalse(result.valid)
         self.assertTrue(any("missing required fields: ['direction']" in x for x in result.issues))
+
+    def test_gradient_selector_anchor_rejects_whole(self):
+        ir = copy.deepcopy(self.state0)
+        ir["distributions"][1]["population"] = {
+            "density_profile": {
+                "type": "gradient",
+                "from": {
+                    "selector": {"type": "anchor", "value": "whole"},
+                    "density": "low",
+                },
+                "to": {
+                    "selector": {"type": "anchor", "value": "west"},
+                    "density": "high",
+                },
+            }
+        }
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(
+            any("selector.value must be one of" in issue for issue in result.issues),
+            result.issues,
+        )
 
     def test_v1_flat_fields_are_rejected_in_v2(self):
         ir = copy.deepcopy(self.state0)

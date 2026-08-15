@@ -134,12 +134,17 @@ class IRValidator:
                     issues.append(f"{loc} has unknown fields: {sorted(extra)}")
 
                 obj_id = obj.get("id")
-                if isinstance(obj_id, str):
+                if isinstance(obj_id, str) and obj_id.strip():
                     if obj_id in ids:
                         issues.append(f"Duplicate id: {obj_id}")
                     else:
                         ids.add(obj_id)
                         id_types[obj_id] = primitive_name
+                elif isinstance(obj_id, str):
+                    # V2's declarative string_nonempty rule reports the field
+                    # error below. Do not register an unusable id for reference
+                    # or duplicate-id validation.
+                    pass
                 elif "id" in obj:
                     issues.append(f"{loc}.id must be a string")
 
@@ -196,6 +201,9 @@ class IRValidator:
         if kind in {"string", "ref", "anchor_or_ref"}:
             if not isinstance(value, str):
                 issues.append(f"{name} must be a string")
+        elif kind == "string_nonempty":
+            if not isinstance(value, str) or not value.strip():
+                issues.append(f"{name} must be a non-empty string")
         elif kind == "anchor":
             if not isinstance(value, str) or value not in self.spec.anchors:
                 issues.append(f"{name} must be one of {sorted(self.spec.anchors)}")

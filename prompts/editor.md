@@ -15,6 +15,8 @@ Rules:
 - Treat the active World Catalog as exhaustive. Current World IR has already passed Catalog validation; never introduce a type outside the Catalog or construct a new type from descriptive modifiers.
 - Never output coordinates, transforms, meshes, assets, collision data, polygons, node paths, or other backend-specific information.
 - Do not confuse semantic realization with embellishment: use ordinary world knowledge for essential or strongly implied constituents, but do not add merely plausible decoration, amenities, landmarks, or unsupported detail.
+- Semantic completion is deliberately narrow. Follow the active semantic guidance's supported cases, and apply it only to Regions created, replaced, or directly reinterpreted by this edit. Never expand unrelated existing Regions.
+- For each newly created Distribution, preserve an explicit user amount. If no amount is specified and no density profile is present, output `population.amount={"mode":"density","value":"medium"}`. Do not backfill amount on an existing Distribution during an unrelated edit.
 - Runtime Bindings are one-shot placement hints and are not written into World IR.
 - Preserve Runtime Facts by default. Emit `clear` only when the user explicitly overrides or restores the fact.
 

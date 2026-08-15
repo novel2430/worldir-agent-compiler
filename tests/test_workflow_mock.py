@@ -212,9 +212,183 @@ class WorkflowTests(unittest.TestCase):
             spec.catalog.allowed_types("Distribution"),
             {"house", "tree", "tombstone", "lamp"},
         )
-        self.assertIn("does not itself define fixed composition pairs", guidance)
+        self.assertIn("does not itself define composition policy", guidance)
+        self.assertNotIn("constituents", spec.catalog.data["types"]["Region"]["forest"])
         self.assertNotIn("forest -> tree", guidance.lower())
         self.assertNotIn("town -> house", guidance.lower())
+
+    def test_v2_semantic_completion_policy_is_narrow_and_explicit(self):
+        guidance = IRSpec(ROOT / "config/world_ir_v2.json").semantic_guidance
+        self.assertIn("a forest normally needs repeated trees", guidance)
+        self.assertIn("a town or village normally needs repeated houses", guidance)
+        self.assertIn("a graveyard normally needs repeated tombstones", guidance)
+        self.assertIn("a coast does not imply a lighthouse", guidance)
+        self.assertIn("a swamp does not by itself imply trees or a landmark", guidance)
+        self.assertIn("never revisit unrelated existing Regions", guidance)
+
+    def test_initial_new_distributions_receive_canonical_amount(self):
+        candidate = {
+            "regions": [],
+            "networks": [],
+            "entities": [],
+            "distributions": [
+                {"id": "default_trees", "type": "tree"},
+                {
+                    "id": "counted_trees",
+                    "type": "tree",
+                    "population": {
+                        "amount": {"mode": "count", "value": 12}
+                    },
+                },
+                {
+                    "id": "gradient_trees",
+                    "type": "tree",
+                    "population": {
+                        "density_profile": {
+                            "type": "gradient",
+                            "from": {
+                                "selector": {"type": "anchor", "value": "west"},
+                                "density": "low",
+                            },
+                            "to": {
+                                "selector": {"type": "anchor", "value": "east"},
+                                "density": "high",
+                            },
+                        }
+                    },
+                },
+            ],
+        }
+        llm = FakeLLM({
+            "initial_translator": [json.dumps(candidate)],
+            "semantic_judge": [judgment()],
+        })
+        workflow = WorldIRWorkflow(
+            llm=llm,
+            prompts=PromptStore(ROOT / "prompts"),
+            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
+            config=WorkflowConfig(),
+        )
+
+        result = workflow.run("生成三组树。")
+
+        self.assertEqual(result.status, "ok")
+        by_id = {item["id"]: item for item in result.ir["distributions"]}
+        self.assertEqual(
+            by_id["default_trees"]["population"]["amount"],
+            {"mode": "density", "value": "medium"},
+        )
+        self.assertEqual(
+            by_id["counted_trees"]["population"]["amount"],
+            {"mode": "count", "value": 12},
+        )
+        self.assertNotIn("amount", by_id["gradient_trees"]["population"])
+
+    def test_edit_defaults_only_new_distribution_amount(self):
+        current = json.loads(
+            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
+        )
+        current["distributions"][0].pop("population")
+        candidate = json.loads(json.dumps(current))
+        candidate["entities"][0]["placement"]["anchor"] = "south"
+        candidate["distributions"].append({"id": "new_lamps", "type": "lamp"})
+        llm = FakeLLM({
+            "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
+            "expressibility": [json.dumps({
+                "expressible": True,
+                "reason": "supported",
+                "unsupported": [],
+            })],
+            "editor": [json.dumps(candidate)],
+            "semantic_judge": [judgment()],
+        })
+        workflow = WorldIRWorkflow(
+            llm=llm,
+            prompts=PromptStore(ROOT / "prompts"),
+            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
+            config=WorkflowConfig(),
+        )
+
+        result = workflow.run("把教堂移到南边，并增加路灯。", current)
+
+        self.assertEqual(result.status, "ok")
+        by_id = {item["id"]: item for item in result.ir["distributions"]}
+        self.assertNotIn("population", by_id["houses"])
+        self.assertEqual(
+            by_id["new_lamps"]["population"]["amount"],
+            {"mode": "density", "value": "medium"},
+        )
+
+    def test_coast_and_swamp_do_not_trigger_unsupported_completion(self):
+        candidate = {
+            "regions": [
+                {"id": "coast", "type": "coast"},
+                {"id": "swamp", "type": "swamp"},
+            ],
+            "networks": [],
+            "entities": [],
+            "distributions": [],
+        }
+        llm = FakeLLM({
+            "initial_translator": [json.dumps(candidate)],
+            "semantic_judge": [judgment()],
+        })
+        workflow = WorldIRWorkflow(
+            llm=llm,
+            prompts=PromptStore(ROOT / "prompts"),
+            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
+            config=WorkflowConfig(),
+        )
+
+        result = workflow.run("生成一片海岸和一片沼泽。")
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.ir["entities"], [])
+        self.assertEqual(result.ir["distributions"], [])
+        translator_prompt = result.trace.events[0].prompt
+        self.assertIn("coast, swamp, field, or district", translator_prompt)
+
+    def test_unrelated_edit_does_not_expand_existing_swamp(self):
+        current = json.loads(
+            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
+        )
+        current["regions"].append({"id": "old_swamp", "type": "swamp"})
+        candidate = json.loads(json.dumps(current))
+        candidate["entities"][0]["placement"]["anchor"] = "south"
+        llm = FakeLLM({
+            "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
+            "expressibility": [json.dumps({
+                "expressible": True,
+                "reason": "supported",
+                "unsupported": [],
+            })],
+            "editor": [json.dumps(candidate)],
+            "semantic_judge": [judgment()],
+        })
+        workflow = WorldIRWorkflow(
+            llm=llm,
+            prompts=PromptStore(ROOT / "prompts"),
+            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
+            config=WorkflowConfig(),
+        )
+
+        result = workflow.run("只把教堂移到南边。", current)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(
+            [item for item in result.ir["regions"] if item["id"] == "old_swamp"],
+            [{"id": "old_swamp", "type": "swamp"}],
+        )
+        self.assertFalse(any(
+            relation.get("target") == "old_swamp"
+            for item in result.ir["distributions"] + result.ir["entities"]
+            for relation in item.get("placement", {}).get("relations", [])
+        ))
+        editor_prompt = next(
+            prompt for node, prompt in zip(llm.calls, llm.prompts)
+            if node == "editor"
+        )
+        self.assertIn("Never expand unrelated existing Regions", editor_prompt)
 
     def test_initial_semantic_judge_retries_with_independent_feedback(self):
         complete = json.loads(

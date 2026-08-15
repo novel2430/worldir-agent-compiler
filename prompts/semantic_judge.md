@@ -22,6 +22,8 @@ Evaluate these fixed dimensions:
 - catalog compliance has already been checked deterministically, but use catalog roles when judging whether a composite concept has sufficient observable realization.
 
 Explicit atypical constraints override ordinary defaults. Do not require a stereotypical constituent when the user explicitly excludes it. For edits, apply semantic completion only to concepts created, replaced, or directly reinterpreted by this request; do not expand unrelated legacy Regions.
+Apply only the narrow semantic-completion cases defined by the active guidance. Treat constituents added to other Regions without direct user support—such as a lighthouse for a coast, or trees/landmarks for a swamp—as invented content.
+For newly created Distributions, require an explicit user amount or the canonical medium-density amount when no density profile is present. Do not require this backfill for pre-existing Distributions in edit mode.
 
 Choose exactly one verdict:
 

@@ -274,6 +274,10 @@ config/world_catalog_v1.json
 
 声明当前后端可生成的有限类型及通用语义角色。Catalog 是 Prompt 与确定性类型校验共享的唯一来源；它不保存 `forest → tree` 一类固定组合映射。复合概念是否被充分实现由独立 Semantic Judge 根据原始用户请求判断。
 
+World IR 与 World Catalog 独立版本化；Server `/info` 分别暴露
+`world_ir_version` 与 `world_catalog_version`，Catalog vocabulary 不属于
+World IR V2 本体。
+
 所以后续我们真的决定把 World IR 从 V0 改成 V0.1 / V1 时，主要修改：
 
 ```text

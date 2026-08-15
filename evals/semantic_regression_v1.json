@@ -18,6 +18,16 @@
       "current_ir": null
     },
     {
+      "id": "initial_coast_does_not_invent_lighthouse",
+      "prompt": "世界东边有一片海岸。",
+      "current_ir": null
+    },
+    {
+      "id": "initial_swamp_does_not_invent_constituents",
+      "prompt": "世界南边有一片沼泽，不要添加未提及的地标。",
+      "current_ir": null
+    },
+    {
       "id": "initial_style_capability_gap",
       "prompt": "生成一个废弃海边小镇，废弃状态必须被保留。",
       "current_ir": null

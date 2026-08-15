@@ -56,5 +56,6 @@ class HealthResult(StrictContractModel):
 class InfoResult(StrictContractModel):
     compiler_version: Literal["0.3.0"]
     world_ir_version: Literal["2"]
+    world_catalog_version: Literal["1"]
     runtime_context_version: Literal["1"]
     compile_result_version: Literal["1"]

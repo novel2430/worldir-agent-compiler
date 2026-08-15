@@ -13,7 +13,9 @@ Select content in two passes:
 1. classify the concepts explicitly requested by the user into canonical objects from the vocabulary;
 2. for every requested composite Region, perform the concept-realization check below and select the smallest strongly implied observable constituents from the same vocabulary.
 
-The vocabulary limits what may be generated; it does not itself define fixed composition pairs. Decide whether a constituent is strongly implied from ordinary world knowledge, the full user description, and explicit exceptions. A listed type that is merely plausible remains unrelated content and must not be added.
+The vocabulary limits what may be generated; it does not itself define composition policy. Under the current Compiler policy, semantic completion is intentionally narrow: a forest normally needs repeated trees, a town or village normally needs repeated houses, and a graveyard normally needs repeated tombstones. Explicit user exceptions still override these defaults.
+
+Do not automatically complete other Region types. In particular, a coast does not imply a lighthouse, and a swamp does not by itself imply trees or a landmark. Districts, fields, and other Regions also require direct support from the user before constituents are added. A listed type that is merely plausible remains unrelated content and must not be added. During an edit, apply completion only to a Region created, replaced, or directly reinterpreted by that edit; never revisit unrelated existing Regions merely because they lack constituents.
 
 ## 0. Primitive classification: choose the semantic role before encoding placement
 
@@ -51,7 +53,7 @@ When translating or editing such a concept:
 - use ordinary world knowledge and the user's context to infer the **smallest set of strongly implied constituents** needed for the concept to be visibly recognizable in the generated world;
 - encode those constituents with the appropriate IR primitives and relate them to the composite place when the active contract supports it;
 - prefer a `Distribution` when a constituent is naturally a repeated population, and an `Entity` only when a distinct individual object is semantically warranted;
-- leave amount, arrangement, subtype, and other details unspecified unless the user or unavoidable concept semantics supports them;
+- leave arrangement, subtype, and other details unspecified unless the user or unavoidable concept semantics supports them; for a newly created Distribution whose amount is otherwise unspecified, use the Compiler canonical amount described in section 4;
 - treat these constituents as realization of requested content, not as unrelated embellishment.
 
 This is semantic completion, not unrestricted worldbuilding. Do not add decorative landmarks, optional amenities, narrative props, or an exhaustive inventory merely because they are plausible. Do not materialize a merely metaphorical use of a place word. Explicit user constraints override defaults: if the user says a place is empty, treeless, buildingless, only symbolic, or otherwise atypical, preserve that meaning instead of restoring stereotypical contents.
@@ -104,6 +106,8 @@ For a Distribution, `population.amount` describes overall amount using exactly o
 
 Do not encode the same amount twice. If the user says “12 栋房子”, prefer count. If the user only says “稀疏的树木”, prefer qualitative density.
 
+For every newly created Distribution, if the user specifies neither an exact count nor qualitative amount, the Compiler canonical form is `{"mode":"density","value":"medium"}`. This makes the amount explicit instead of relying on a Backend default. Do not add this uniform density when `density_profile` is present, because the profile is already the authoritative density specification. This is Compiler canonicalization only: the V2 structural schema continues to allow `population.amount` to be absent.
+
 ## 5. `population.arrangement`: how instances are arranged relative to each other
 
 Arrangement is orthogonal to placement and amount.
@@ -133,6 +137,7 @@ For V2 `gradient`:
 - Selector `anchor` is world-relative **but is resolved inside the current Distribution placement domain**.
   - If trees are `inside forest`, “越往森林西侧越密” should use an endpoint such as `selector={"type":"anchor","value":"west"}`. This means the world-west side of the forest-constrained Distribution domain.
   - Do **not** encode “森林西侧” as `direction_of(target="forest", direction="west")`; that means a locus west of the forest, not the western interior of the forest.
+  - `whole` is not a valid SpatialSelector anchor because it does not identify a directional or local gradient endpoint. It remains valid for `placement.anchor`.
 - Selector `near` / `far_from` / `direction_of` is target-relative.
   - “靠近道路稀疏，离道路越远越密” can use near-road low → far-from-road high.
 - Exact interpolation and coordinates are backend-defined.
@@ -149,7 +154,7 @@ When the user says an existing object should not move or should remain unchanged
 
 For example, if a church currently has both `anchor=north` and `near road`, “不要移动教堂” normally means preserve both unless the user explicitly changes one of them.
 
-Do not add optional fields that are absent from the current state merely because the schema allows them.
+Do not add optional fields that are absent from the current state merely because the schema allows them. In particular, do not backfill amount on an existing Distribution during an unrelated edit; the medium-density canonicalization applies only when the Compiler creates a new Distribution.
 
 ## 8. IR gap discipline
 

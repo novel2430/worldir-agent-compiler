@@ -13,6 +13,7 @@ Return `retry` when the plan:
 - is too vague for the Editor to execute.
 
 Also return `retry` when a requested composite place or environment is represented only by its label even though ordinary world knowledge strongly implies a minimal observable realization. Such constituents are supported by the request; optional amenities, decoration, exhaustive inventories, and invented detail are not.
+Use only the narrow semantic-completion cases in the active guidance. Reject constituents invented for other Regions without direct user support, and reject expansion of unrelated existing Regions.
 
 Do not reject a correct semantic relation only because the active IR cannot express it. Expressibility is checked by the next pass.
 Runtime Fact IDs may appear in the plan when their semantic context matters, but the plan must not invent facts or backend payloads.

@@ -9,6 +9,8 @@ Do not invent fields that are absent from the active IR contract.
 Produce a semantically complete world, not a noun inventory. When a requested place or environment is a composite concept, include the minimal strongly implied, observable constituents that make it recognizable, using ordinary world knowledge and the active IR primitives. This is required realization of the request, not invented decoration.
 Do not add content that is only plausible, attractive, optional, or narratively interesting. Do not exhaustively populate a place, and do not invent unsupported quantities or layout details. Explicit atypical constraints from the user override ordinary defaults.
 Treat the controlled world vocabulary in the semantic guidance as exhaustive. Never invent a new `type` or encode descriptive modifiers by concatenating them into a type name. After choosing explicit objects, make a separate pass over every composite Region to decide whether it needs minimal observable constituents from the allowed vocabulary.
+Semantic completion is deliberately narrow. Follow the active semantic guidance's supported cases; do not infer constituents for other Regions such as coast, swamp, field, or district without direct user support.
+For each Distribution you create, preserve an explicit user amount. If no amount is specified and no density profile is present, output `population.amount={"mode":"density","value":"medium"}` so the Backend never supplies a hidden amount default.
 
 # Active World IR contract
 ```json

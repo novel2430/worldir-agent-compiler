@@ -19,6 +19,11 @@ class SemanticRegressionInputTests(unittest.TestCase):
             self.assertNotIn("expect", case)
             self.assertNotIn("expected_ir", case)
 
+        case_ids = {case["id"] for case in suite["cases"]}
+        self.assertIn("initial_coast_does_not_invent_lighthouse", case_ids)
+        self.assertIn("initial_swamp_does_not_invent_constituents", case_ids)
+        self.assertIn("edit_does_not_expand_unrelated_regions", case_ids)
+
         edit_case = next(
             case for case in suite["cases"] if "current_ir_file" in case
         )

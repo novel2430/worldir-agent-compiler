@@ -178,6 +178,7 @@ class WorldIRWorkflow:
                 VALIDATION_FEEDBACK=feedback,
             )
             candidate = self._call_json(trace, "initial_translator", prompt, attempt)
+            self._canonicalize_new_distributions(candidate, current_ir=None)
             local = self.validator.validate(candidate)
             trace.add_validation(
                 layer="world_ir",
@@ -342,6 +343,7 @@ class WorldIRWorkflow:
             )
 
             candidate = draft.world_ir
+            self._canonicalize_new_distributions(candidate, current_ir=current_ir)
             local = self.validator.validate(candidate)
             trace.add_validation(
                 layer="world_ir",
@@ -421,6 +423,58 @@ class WorldIRWorkflow:
             },
             trace,
         )
+
+    def _canonicalize_new_distributions(
+        self,
+        candidate: dict[str, Any],
+        *,
+        current_ir: dict[str, Any] | None,
+    ) -> None:
+        """Make the amount of newly created V2 Distributions explicit.
+
+        The V2 schema deliberately keeps population.amount optional. Compiler
+        output is stricter: a new Distribution without an amount receives the
+        canonical medium density so a Backend never supplies a hidden default.
+        Existing Distributions are left untouched during edits, and a density
+        profile remains authoritative rather than receiving a conflicting
+        uniform-density amount.
+        """
+        if self.spec.data.get("version") != "World IR V2":
+            return
+
+        distributions = candidate.get("distributions")
+        if not isinstance(distributions, list):
+            return
+
+        existing_ids: set[str] = set()
+        if isinstance(current_ir, dict):
+            current_distributions = current_ir.get("distributions")
+            if isinstance(current_distributions, list):
+                existing_ids = {
+                    item["id"]
+                    for item in current_distributions
+                    if isinstance(item, dict)
+                    and isinstance(item.get("id"), str)
+                    and item["id"].strip()
+                }
+
+        for distribution in distributions:
+            if not isinstance(distribution, dict):
+                continue
+            distribution_id = distribution.get("id")
+            if isinstance(distribution_id, str) and distribution_id in existing_ids:
+                continue
+
+            if "population" not in distribution:
+                distribution["population"] = {
+                    "amount": {"mode": "density", "value": "medium"}
+                }
+                continue
+            population = distribution["population"]
+            if not isinstance(population, dict):
+                continue
+            if "amount" not in population and "density_profile" not in population:
+                population["amount"] = {"mode": "density", "value": "medium"}
 
     def _judge_candidate(
         self,

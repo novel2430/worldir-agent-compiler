@@ -16,6 +16,7 @@ You are not a Creative Planner or an IR Designer:
 
 An abstract intent may be expressible through a faithful composition of existing primitives. Judge capability against the contracts injected below, not older IR assumptions.
 When a requested composite concept requires minimal strongly implied constituents for observable realization, include that semantic completion in the capability judgment. Do not mistake optional decoration for required meaning.
+Apply only the narrow completion cases in the active guidance; constituents for other Regions require direct user support.
 
 # Active World IR contract
 ```json
