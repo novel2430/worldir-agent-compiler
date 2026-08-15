@@ -115,18 +115,32 @@ class V2ValidatorTests(unittest.TestCase):
         ir["regions"][0]["type"] = "abandoned_seaside_town"
         result = self.validator.validate(ir)
         self.assertFalse(result.valid)
-        self.assertTrue(any("World Catalog V1" in issue for issue in result.issues))
+        self.assertTrue(any("World Catalog V2" in issue for issue in result.issues))
+
+    def test_network_type_is_catalog_single_source_of_truth(self):
+        spec = self.validator.spec
+        self.assertEqual(spec.data["primitives"]["Network"]["fields"]["type"], {
+            "kind": "string"
+        })
+        ir = copy.deepcopy(self.state0)
+        ir["networks"][0]["type"] = "road"
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any(
+            "for Network: 'road'" in issue and "allowed: ['path']" in issue
+            for issue in result.issues
+        ))
 
     def test_region_can_use_relative_placement_without_anchor(self):
         ir = copy.deepcopy(self.state0)
         ir["regions"].append({
-            "id": "village",
-            "type": "village",
+            "id": "snow_forest_north",
+            "type": "snow_forest",
             "placement": {
                 "relations": [
                     {
                         "type": "direction_of",
-                        "target": "forest",
+                        "target": "coastal_forest",
                         "direction": "south",
                     }
                 ]
@@ -163,7 +177,7 @@ class V2ValidatorTests(unittest.TestCase):
     def test_network_can_have_placement_relation(self):
         ir = copy.deepcopy(self.state0)
         ir["networks"][0]["placement"] = {
-            "relations": [{"type": "inside", "target": "forest"}]
+            "relations": [{"type": "inside", "target": "coastal_forest"}]
         }
         result = self.validator.validate(ir)
         self.assertTrue(result.valid, result.issues)
@@ -213,7 +227,7 @@ class V2ValidatorTests(unittest.TestCase):
             "density_profile": {
                 "type": "gradient",
                 "from": {
-                    "selector": {"type": "near", "target": "main_road"},
+                    "selector": {"type": "near", "target": "main_path"},
                     "density": "low",
                 },
                 "to": {
@@ -231,7 +245,7 @@ class V2ValidatorTests(unittest.TestCase):
         trees["population"]["density_profile"] = {
             "type": "gradient",
             "from": {
-                "selector": {"type": "near", "target": "main_road"},
+                "selector": {"type": "near", "target": "main_path"},
                 "density": "low",
             },
             "to": {
@@ -251,7 +265,7 @@ class V2ValidatorTests(unittest.TestCase):
             "density_profile": {
                 "type": "gradient",
                 "from": {
-                    "selector": {"type": "near", "target": "main_road"},
+                    "selector": {"type": "near", "target": "main_path"},
                     "density": "low",
                 },
                 "to": {
@@ -327,6 +341,110 @@ class V2ValidatorTests(unittest.TestCase):
         result = self.validator.validate(ir)
         self.assertFalse(result.valid)
         self.assertTrue(any("unknown fields" in x for x in result.issues))
+
+    def _minimal_world(self, region_type, primitive, object_type, *, owners=1):
+        relations = [
+            {"type": "inside", "target": f"owner_{index}"}
+            for index in range(owners)
+        ]
+        regions = [
+            {"id": f"owner_{index}", "type": region_type}
+            for index in range(max(owners, 1))
+        ]
+        collection = "entities" if primitive == "Entity" else "distributions"
+        world = {
+            "regions": regions,
+            "networks": [],
+            "entities": [],
+            "distributions": [],
+        }
+        world[collection].append({
+            "id": "subject",
+            "type": object_type,
+            "placement": {"relations": relations},
+        })
+        return world
+
+    def test_entity_requires_exactly_one_region_owner(self):
+        ir = self._minimal_world("coastal_forest", "Entity", "tent", owners=0)
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any("exactly one inside relation" in x for x in result.issues))
+
+    def test_distribution_requires_exactly_one_region_owner(self):
+        ir = self._minimal_world("coastal_forest", "Distribution", "tree", owners=0)
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any("exactly one inside relation" in x for x in result.issues))
+
+    def test_entity_two_inside_regions_invalid(self):
+        ir = self._minimal_world("coastal_forest", "Entity", "tent", owners=2)
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any("found 2" in x for x in result.issues))
+
+    def test_distribution_two_inside_regions_invalid(self):
+        ir = self._minimal_world("coastal_forest", "Distribution", "tree", owners=2)
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any("found 2" in x for x in result.issues))
+
+    def test_region_inside_region_invalid(self):
+        ir = {
+            "regions": [
+                {"id": "outer", "type": "coastal_forest"},
+                {
+                    "id": "inner",
+                    "type": "snow_forest",
+                    "placement": {
+                        "relations": [{"type": "inside", "target": "outer"}]
+                    },
+                },
+            ],
+            "networks": [],
+            "entities": [],
+            "distributions": [],
+        }
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any("Region nesting is unsupported" in x for x in result.issues))
+
+    def test_rowboat_inside_coastal_forest_valid(self):
+        ir = self._minimal_world("coastal_forest", "Entity", "rowboat")
+        self.assertTrue(self.validator.validate(ir).valid)
+
+    def test_rowboat_inside_snow_forest_invalid(self):
+        ir = self._minimal_world("snow_forest", "Entity", "rowboat")
+        result = self.validator.validate(ir)
+        self.assertFalse(result.valid)
+        self.assertTrue(any(
+            "type 'rowboat' is not allowed inside Region type 'snow_forest'" in x
+            for x in result.issues
+        ))
+
+    def test_research_station_inside_research_base_valid(self):
+        ir = self._minimal_world("research_base", "Entity", "research_station")
+        self.assertTrue(self.validator.validate(ir).valid)
+
+    def test_research_station_inside_coastal_forest_invalid(self):
+        ir = self._minimal_world("coastal_forest", "Entity", "research_station")
+        self.assertFalse(self.validator.validate(ir).valid)
+
+    def test_grass_inside_snow_forest_invalid(self):
+        ir = self._minimal_world("snow_forest", "Distribution", "grass")
+        self.assertFalse(self.validator.validate(ir).valid)
+
+    def test_fallen_log_inside_snow_forest_is_not_exposed_without_backend_evidence(self):
+        ir = self._minimal_world("snow_forest", "Distribution", "fallen_log")
+        self.assertFalse(self.validator.validate(ir).valid)
+
+    def test_cabin_inside_coastal_forest_valid(self):
+        ir = self._minimal_world("coastal_forest", "Entity", "cabin")
+        self.assertTrue(self.validator.validate(ir).valid)
+
+    def test_cabin_inside_snow_forest_valid(self):
+        ir = self._minimal_world("snow_forest", "Entity", "cabin")
+        self.assertTrue(self.validator.validate(ir).valid)
 
 
 if __name__ == "__main__":

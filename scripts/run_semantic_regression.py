@@ -14,7 +14,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--cases",
-        default="evals/semantic_regression_v1.json",
+        default="evals/semantic_regression_v2.json",
         help="Input-only semantic regression suite",
     )
     parser.add_argument(
@@ -22,7 +22,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="http://127.0.0.1:8787",
         help="Compiler server base URL",
     )
-    parser.add_argument("--out", required=True, help="Write run results to this JSON file")
+    parser.add_argument(
+        "--out",
+        default="runs/semantic-regression-v2.json",
+        help="Write run results to this JSON file",
+    )
     parser.add_argument("--timeout", type=float, default=180.0)
     return parser
 

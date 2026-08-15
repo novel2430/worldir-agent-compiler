@@ -1,7 +1,7 @@
 {
   "version": "World IR V2",
   "semantic_guidance_file": "world_ir_v2_semantics.md",
-  "world_catalog_file": "world_catalog_v1.json",
+  "world_catalog_file": "world_catalog_v2.json",
   "root_collections": {
     "regions": "Region",
     "networks": "Network",
@@ -461,11 +461,7 @@
           "kind": "string_nonempty"
         },
         "type": {
-          "kind": "enum",
-          "values": [
-            "road",
-            "path"
-          ]
+          "kind": "string"
         },
         "topology": {
           "kind": "schema_ref",
@@ -539,6 +535,9 @@
     "A gradient SpatialSelector identifies a qualitative locus within the Distribution placement domain. selector anchor=west means the world-west side of that domain; direction_of(target=forest, west) instead means a locus west of the forest and must not be used as shorthand for the forest interior west side.",
     "If density_profile is present, amount.mode=count may still provide a total instance budget. amount.mode=density is mutually exclusive with density_profile. When an edit changes a uniform/global qualitative density into a spatial gradient, replacing amount.mode=density with density_profile is the requested density change and is not a preservation violation.",
     "inside, near, far_from, along, and direction_of are shared placement relations rather than primitive-specific fields.",
+    "Every Entity and Distribution has exactly one owner Region through an inside relation; additional spatial relations remain allowed.",
+    "Regions cannot use inside relations. Region nesting is outside World IR V2.",
+    "All Primitive type vocabularies, including Network.type, are controlled by the active World Catalog.",
     "near and far_from remain qualitative. Numeric distance/spacing is intentionally outside V2 until a real use case requires it.",
     "Do not encode stylistic labels such as natural, eerie, civilized, or wild directly in the IR when they can be semantically lowered into placement/population structure.",
     "Do not invent fields, relation types, arrangement types, profile types, selector types, or enum values absent from this specification.",

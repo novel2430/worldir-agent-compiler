@@ -109,7 +109,8 @@ class IRValidator:
             issues.append(f"Unknown root collections: {sorted(extra_roots)}")
 
         ids: set[str] = set()
-        id_types: dict[str, str] = {}
+        id_primitives: dict[str, str] = {}
+        id_semantic_types: dict[str, str] = {}
         objects: list[tuple[str, str, dict[str, Any]]] = []
 
         # First pass: primitive structure, nested value structure, and ids.
@@ -139,7 +140,10 @@ class IRValidator:
                         issues.append(f"Duplicate id: {obj_id}")
                     else:
                         ids.add(obj_id)
-                        id_types[obj_id] = primitive_name
+                        id_primitives[obj_id] = primitive_name
+                        semantic_type = obj.get("type")
+                        if isinstance(semantic_type, str):
+                            id_semantic_types[obj_id] = semantic_type
                 elif isinstance(obj_id, str):
                     # V2's declarative string_nonempty rule reports the field
                     # error below. Do not register an unusable id for reference
@@ -177,9 +181,16 @@ class IRValidator:
                         value,
                         rule,
                         primitive_name,
-                        id_types,
+                        id_primitives,
                         issues,
                     )
+
+        self._check_catalog_invariants(
+            objects,
+            id_primitives,
+            id_semantic_types,
+            issues,
+        )
 
         return ValidationResult(valid=not issues, issues=issues)
 
@@ -361,7 +372,7 @@ class IRValidator:
         value: Any,
         rule: dict[str, Any],
         source_primitive: str,
-        id_types: dict[str, str],
+        id_primitives: dict[str, str],
         issues: list[str],
     ) -> None:
         rule = self.spec.resolve_rule(rule)
@@ -369,17 +380,19 @@ class IRValidator:
         anchors = self.spec.anchors
 
         if kind == "ref" and isinstance(value, str):
-            if value not in id_types:
+            if value not in id_primitives:
                 issues.append(f"{name} references unknown id: {value}")
         elif kind == "ref_list" and isinstance(value, list):
             for ref in value:
-                if isinstance(ref, str) and ref not in id_types:
+                if isinstance(ref, str) and ref not in id_primitives:
                     issues.append(f"{name} references unknown id: {ref}")
         elif kind == "anchor_or_ref" and isinstance(value, str):
-            if value not in anchors and value not in id_types:
+            if value not in anchors and value not in id_primitives:
                 issues.append(f"{name} must be an anchor or existing id: {value}")
         elif kind == "relation_list" and isinstance(value, list):
-            self._check_relations(name, source_primitive, value, id_types, issues)
+            self._check_relations(
+                name, source_primitive, value, id_primitives, issues
+            )
         elif kind == "object" and isinstance(value, dict):
             fields = rule.get("fields", {})
             for field, nested_value in value.items():
@@ -390,7 +403,7 @@ class IRValidator:
                         nested_value,
                         nested_rule,
                         source_primitive,
-                        id_types,
+                        id_primitives,
                         issues,
                     )
         elif kind == "tagged_union" and isinstance(value, dict):
@@ -407,7 +420,7 @@ class IRValidator:
                             nested_value,
                             nested_rule,
                             source_primitive,
-                            id_types,
+                            id_primitives,
                             issues,
                         )
 
@@ -416,7 +429,7 @@ class IRValidator:
         name: str,
         source_primitive: str,
         relations: list[Any],
-        id_types: dict[str, str],
+        id_primitives: dict[str, str],
         issues: list[str],
     ) -> None:
         relation_types = self.spec.data.get("relation_types", {})
@@ -461,7 +474,7 @@ class IRValidator:
             if "target" in relation and not isinstance(target, str):
                 issues.append(f"{relation_name}.target must be a string")
             elif isinstance(target, str):
-                target_primitive = id_types.get(target)
+                target_primitive = id_primitives.get(target)
                 if target_primitive is None:
                     issues.append(f"{relation_name}.target references unknown id: {target}")
                 else:
@@ -483,3 +496,81 @@ class IRValidator:
                     issues.append(
                         f"{relation_name}.direction must be one of {direction_values}"
                     )
+
+    def _check_catalog_invariants(
+        self,
+        objects: list[tuple[str, str, dict[str, Any]]],
+        id_primitives: dict[str, str],
+        id_semantic_types: dict[str, str],
+        issues: list[str],
+    ) -> None:
+        """Enforce closed-world ownership and Region compatibility for V2.
+
+        These rules require both primitive identity and semantic type identity,
+        so they run after the reference index has been built. They deliberately
+        validate rather than synthesize content: archetype realization remains
+        an activation-time compiler policy sourced from the Catalog.
+        """
+        if self.spec.data.get("version") != "World IR V2":
+            return
+
+        catalog = self.spec.catalog
+        if catalog is None:
+            issues.append("World IR V2 closed-world invariants require a World Catalog")
+            return
+
+        for loc, primitive_name, obj in objects:
+            placement = obj.get("placement")
+            relations = (
+                placement.get("relations", [])
+                if isinstance(placement, dict)
+                else []
+            )
+            inside_relations = [
+                relation
+                for relation in relations
+                if isinstance(relation, dict) and relation.get("type") == "inside"
+            ] if isinstance(relations, list) else []
+
+            if primitive_name == "Region":
+                if inside_relations:
+                    issues.append(
+                        f"{loc} Region cannot have an inside relation; "
+                        "Region nesting is unsupported"
+                    )
+                continue
+
+            if primitive_name not in {"Entity", "Distribution"}:
+                continue
+
+            if len(inside_relations) != 1:
+                issues.append(
+                    f"{loc} must have exactly one inside relation targeting a Region; "
+                    f"found {len(inside_relations)}"
+                )
+                continue
+
+            owner_id = inside_relations[0].get("target")
+            if not isinstance(owner_id, str):
+                continue
+            if id_primitives.get(owner_id) != "Region":
+                # The relation validator reports unknown/wrong-primitive targets.
+                continue
+
+            source_type = obj.get("type")
+            owner_region_type = id_semantic_types.get(owner_id)
+            if (
+                not isinstance(source_type, str)
+                or source_type not in catalog.allowed_types(primitive_name)
+                or owner_region_type not in catalog.allowed_types("Region")
+            ):
+                # Vocabulary errors are already reported in the first pass.
+                continue
+
+            allowed_regions = catalog.allowed_regions(primitive_name, source_type)
+            if owner_region_type not in allowed_regions:
+                issues.append(
+                    f"{loc} type {source_type!r} is not allowed inside "
+                    f"Region type {owner_region_type!r}; allowed_regions: "
+                    f"{sorted(allowed_regions)}"
+                )

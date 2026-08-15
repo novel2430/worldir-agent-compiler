@@ -37,6 +37,12 @@ class FakeLLM:
         self.prompts.append(prompt)
         if node in self.errors:
             raise self.errors[node]
+        if node == "expressibility" and node not in self.responses:
+            return json.dumps({
+                "expressible": True,
+                "reason": "supported",
+                "unsupported": [],
+            })
         return self.responses[node].pop(0)
 
 
@@ -51,7 +57,7 @@ def runtime_context_payload():
             "id": "clearing_01",
             "kind": "marked_area",
             "mark": "cleared",
-            "location": {"inside": "forest", "anchor": "east"},
+            "location": {"inside": "coastal_forest", "anchor": "east"},
             "affected_type": "tree",
             "count": 23,
         }],
@@ -94,7 +100,7 @@ def make_http_llm():
 
 def compile_request(current_ir=None, runtime_context=None):
     return {
-        "prompt": "把我刚刚砍出来的地方变成墓地。",
+        "prompt": "生成一片森林。",
         "current_ir": current_ir,
         "runtime_context": runtime_context or {"version": "1", "facts": []},
     }
@@ -103,11 +109,19 @@ def compile_request(current_ir=None, runtime_context=None):
 class CompilerCoreServerModeTests(unittest.TestCase):
     def test_runtime_aware_editor_draft_uses_existing_workflow(self):
         candidate = copy.deepcopy(state_v2())
-        candidate["regions"].append({"id": "graveyard", "type": "graveyard"})
+        candidate["entities"].append({
+            "id": "tent_in_clearing",
+            "type": "tent",
+            "placement": {
+                "relations": [
+                    {"type": "inside", "target": "coastal_forest"}
+                ]
+            },
+        })
         draft = {
             "world_ir": candidate,
             "runtime_bindings": [{
-                "ir_object_id": "graveyard",
+                "ir_object_id": "tent_in_clearing",
                 "runtime_fact_id": "clearing_01",
                 "placement": "inside",
             }],
@@ -125,7 +139,7 @@ class CompilerCoreServerModeTests(unittest.TestCase):
         })
         compiler = make_compiler(llm)
         result = compiler.compile_world(
-            "把我刚刚砍出来的地方变成墓地。",
+            "在我刚刚砍出来的地方搭一个帐篷。",
             state_v2(),
             RuntimeContext.model_validate(runtime_context_payload()),
         )
@@ -136,11 +150,19 @@ class CompilerCoreServerModeTests(unittest.TestCase):
 
     def test_runtime_reference_error_retries_editor_before_semantic_judge(self):
         candidate = copy.deepcopy(state_v2())
-        candidate["regions"].append({"id": "graveyard", "type": "graveyard"})
+        candidate["entities"].append({
+            "id": "tent_in_clearing",
+            "type": "tent",
+            "placement": {
+                "relations": [
+                    {"type": "inside", "target": "coastal_forest"}
+                ]
+            },
+        })
         invalid_draft = {
             "world_ir": candidate,
             "runtime_bindings": [{
-                "ir_object_id": "graveyard",
+                "ir_object_id": "tent_in_clearing",
                 "runtime_fact_id": "not_in_context",
                 "placement": "inside",
             }],
@@ -159,7 +181,7 @@ class CompilerCoreServerModeTests(unittest.TestCase):
             "semantic_judge": [pass_judgment()],
         })
         result = make_compiler(llm).compile_world(
-            "把空地变成墓地。",
+            "在空地搭一个帐篷。",
             state_v2(),
             RuntimeContext.model_validate(runtime_context_payload()),
         )
@@ -189,7 +211,7 @@ class ServerHTTPTests(unittest.TestCase):
         self.assertEqual(client.get("/info").json(), {
             "compiler_version": "0.3.0",
             "world_ir_version": "2",
-            "world_catalog_version": "1",
+            "world_catalog_version": "2",
             "runtime_context_version": "1",
             "compile_result_version": "1",
         })
@@ -231,7 +253,10 @@ class ServerHTTPTests(unittest.TestCase):
 
             self.assertEqual(first.status_code, 200, first.text)
             self.assertEqual(second.status_code, 200, second.text)
-            self.assertEqual(llm.calls, ["initial_translator", "semantic_judge"])
+            self.assertEqual(
+                llm.calls,
+                ["expressibility", "initial_translator", "semantic_judge"],
+            )
             self.assertEqual(first.json()["world_ir"], second.json()["world_ir"])
             self.assertNotEqual(
                 first.json()["meta"]["request_id"],
@@ -296,7 +321,7 @@ class ServerHTTPTests(unittest.TestCase):
             self.assertEqual(second.status_code, 200, second.text)
             self.assertEqual(
                 second_llm.calls,
-                ["initial_translator", "semantic_judge"],
+                ["expressibility", "initial_translator", "semantic_judge"],
             )
             self.assertEqual(len(list(Path(temp_dir).glob("*.json"))), 2)
 
@@ -320,8 +345,10 @@ class ServerHTTPTests(unittest.TestCase):
             self.assertEqual(
                 llm.calls,
                 [
+                    "expressibility",
                     "initial_translator",
                     "semantic_judge",
+                    "expressibility",
                     "initial_translator",
                     "semantic_judge",
                 ],

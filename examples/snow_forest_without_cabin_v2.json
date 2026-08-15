@@ -1,0 +1,45 @@
+{
+  "regions": [
+    {
+      "id": "snow_region",
+      "type": "snow_forest",
+      "placement": {"anchor": "west"}
+    }
+  ],
+  "networks": [],
+  "entities": [
+    {
+      "id": "ruined_archway",
+      "type": "ruined_archway",
+      "placement": {
+        "relations": [{"type": "inside", "target": "snow_region"}]
+      }
+    }
+  ],
+  "distributions": [
+    {
+      "id": "snow_trees",
+      "type": "tree",
+      "placement": {
+        "relations": [{"type": "inside", "target": "snow_region"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "high"}}
+    },
+    {
+      "id": "snow_shrubs",
+      "type": "shrub",
+      "placement": {
+        "relations": [{"type": "inside", "target": "snow_region"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "low"}}
+    },
+    {
+      "id": "snow_rocks",
+      "type": "rock",
+      "placement": {
+        "relations": [{"type": "inside", "target": "snow_region"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "high"}}
+    }
+  ]
+}

@@ -59,8 +59,8 @@ def build_compiler(config: AppConfig) -> WorldCompiler:
     spec = IRSpec(config.ir.spec)
     if spec.data.get("version") != "World IR V2":
         raise ValueError("Configured IR spec is not World IR V2")
-    if spec.catalog is None or spec.catalog.version != "World Catalog V1":
-        raise ValueError("Server V0 requires World Catalog version 1")
+    if spec.catalog is None or spec.catalog.version != "World Catalog V2":
+        raise ValueError("Server V0 requires World Catalog version 2")
 
     configured_semantics = Path(config.ir.semantics).resolve()
     declared_semantics = (
@@ -181,7 +181,7 @@ def create_app(
         return InfoResult(
             compiler_version="0.3.0",
             world_ir_version="2",
-            world_catalog_version="1",
+            world_catalog_version="2",
             runtime_context_version="1",
             compile_result_version="1",
         )

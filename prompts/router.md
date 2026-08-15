@@ -12,6 +12,13 @@ Choose exactly one route:
 An explicit request can still be unsupported by the active IR. For example, an explicit relative placement must not be routed to `deliberate` merely to hide an IR capability gap.
 A reference to a Runtime Fact does not by itself require deliberation.
 
+Use `bypass` for explicit supported semantic changes such as replacing a Region
+with `snow_forest`, adding a `radar_tower`, deleting a cabin, changing tree
+density, or adding a path. Use `deliberate` for high-level intent such as
+post-collapse atmosphere or industrial danger that first needs lowering into the
+finite Catalog. Never route an explicit unsupported concept to `deliberate` to
+hide an IR GAP.
+
 # Active World IR contract
 ```json
 {{IR_SCHEMA_JSON}}

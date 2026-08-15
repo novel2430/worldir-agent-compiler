@@ -37,11 +37,19 @@ class SmokeLLM:
                 "unsupported": [],
             })
         if node == "editor":
-            state["regions"].append({"id": "graveyard", "type": "graveyard"})
+            state["entities"].append({
+                "id": "tent_in_clearing",
+                "type": "tent",
+                "placement": {
+                    "relations": [
+                        {"type": "inside", "target": "coastal_forest"}
+                    ]
+                },
+            })
             return json.dumps({
                 "world_ir": state,
                 "runtime_bindings": [{
-                    "ir_object_id": "graveyard",
+                    "ir_object_id": "tent_in_clearing",
                     "runtime_fact_id": "clearing_01",
                     "placement": "inside",
                 }],

@@ -731,7 +731,7 @@ Returns active protocol/compiler information:
 {
   "compiler_version": "0.3.0",
   "world_ir_version": "2",
-  "world_catalog_version": "1",
+  "world_catalog_version": "2",
   "runtime_context_version": "1",
   "compile_result_version": "1"
 }

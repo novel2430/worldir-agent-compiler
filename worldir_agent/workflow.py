@@ -168,8 +168,29 @@ class WorldIRWorkflow:
     def _run_initial(self, user_prompt: str) -> WorkflowResult:
         trace = RunTrace(mode="initial")
         self.last_trace = trace
-        feedback = "None"
         empty_context = RuntimeContext.model_validate({"version": "1", "facts": []})
+        initial_intent = {
+            "source": "direct_initial",
+            "instruction": user_prompt,
+        }
+        express_prompt = self._render_edit_prompt(
+            "expressibility",
+            empty_context,
+            MODE="initial",
+            CURRENT_IR="null",
+            USER_PROMPT=user_prompt,
+            SEMANTIC_INTENT=pretty_json(initial_intent),
+        )
+        express = self._call_json(trace, "expressibility", express_prompt)
+        if not bool(express.get("expressible")):
+            return WorkflowResult(
+                "ir_gap",
+                None,
+                {"mode": "initial", "expressibility": express},
+                trace,
+            )
+
+        feedback = "None"
         last_issues: list[str] = []
         for attempt in range(1, self.config.initial_max_attempts + 1):
             prompt = self._render_ir_prompt(
@@ -291,6 +312,7 @@ class WorldIRWorkflow:
         express_prompt = self._render_edit_prompt(
             "expressibility",
             runtime_context,
+            MODE="edit",
             CURRENT_IR=pretty_json(current_ir),
             USER_PROMPT=user_prompt,
             SEMANTIC_INTENT=pretty_json(semantic_intent),

@@ -1,5 +1,8 @@
-from pathlib import Path
+from __future__ import annotations
+
+import copy
 import json
+from pathlib import Path
 import unittest
 
 from worldir_agent.config import WorkflowConfig
@@ -7,19 +10,29 @@ from worldir_agent.prompts import PromptStore
 from worldir_agent.schema import IRSpec
 from worldir_agent.workflow import WorldIRWorkflow
 
+
 ROOT = Path(__file__).resolve().parents[1]
+V2_SPEC = ROOT / "config/world_ir_v2.json"
 
 
 class FakeLLM:
     def __init__(self, responses):
-        self.responses = {k: list(v) for k, v in responses.items()}
-        self.calls = []
-        self.prompts = []
+        self.responses = {key: list(value) for key, value in responses.items()}
+        self.calls: list[str] = []
+        self.prompts: list[str] = []
 
     def complete(self, node, prompt):
         self.calls.append(node)
         self.prompts.append(prompt)
         return self.responses[node].pop(0)
+
+
+def expressible(value=True, unsupported=None):
+    return json.dumps({
+        "expressible": value,
+        "reason": "supported" if value else "outside closed-world capabilities",
+        "unsupported": unsupported or [],
+    })
 
 
 def judgment(verdict="pass", *, critique="", missing=None, unsupported=None):
@@ -36,499 +49,428 @@ def judgment(verdict="pass", *, critique="", missing=None, unsupported=None):
     })
 
 
-class WorkflowTests(unittest.TestCase):
-    def test_explicit_edit_bypass(self):
-        state0 = json.loads((ROOT / "examples/state0.json").read_text(encoding="utf-8"))
-        state1 = json.loads(json.dumps(state0))
-        state1["entities"][0]["location"] = "northwest"
-        state1["distributions"][0]["count"] = 20
+def workflow(llm, *, judge_llm=None, checker=False):
+    return WorldIRWorkflow(
+        llm=llm,
+        judge_llm=judge_llm,
+        prompts=PromptStore(ROOT / "prompts"),
+        spec=IRSpec(V2_SPEC),
+        config=WorkflowConfig(use_planner_checker=checker),
+    )
 
+
+def archetype_world(
+    region_type: str,
+    *,
+    region_id: str = "environment",
+    anchor: str = "west",
+    excluded_entities: set[str] | None = None,
+    density_overrides: dict[str, str] | None = None,
+):
+    excluded_entities = excluded_entities or set()
+    density_overrides = density_overrides or {}
+    realization = IRSpec(V2_SPEC).catalog.default_realization(region_type)
+    entities = [
+        {
+            "id": item["type"],
+            "type": item["type"],
+            "placement": {
+                "relations": [{"type": "inside", "target": region_id}]
+            },
+        }
+        for item in realization["entities"]
+        if item["type"] not in excluded_entities
+    ]
+    distributions = []
+    for item in realization["distributions"]:
+        population = copy.deepcopy(item["population"])
+        if item["type"] in density_overrides:
+            population["amount"] = {
+                "mode": "density",
+                "value": density_overrides[item["type"]],
+            }
+        distributions.append({
+            "id": f"{item['type']}_population",
+            "type": item["type"],
+            "placement": {
+                "relations": [{"type": "inside", "target": region_id}]
+            },
+            "population": population,
+        })
+    return {
+        "regions": [{
+            "id": region_id,
+            "type": region_type,
+            "placement": {"anchor": anchor},
+        }],
+        "networks": [],
+        "entities": entities,
+        "distributions": distributions,
+    }
+
+
+class LegacyWorkflowTests(unittest.TestCase):
+    def test_explicit_edit_bypass(self):
+        state0 = json.loads((ROOT / "examples/state0.json").read_text())
+        state1 = copy.deepcopy(state0)
+        state1["entities"][0]["location"] = "northwest"
         llm = FakeLLM({
             "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
-            "expressibility": [json.dumps({"expressible": True, "reason": "supported", "unsupported": []})],
+            "expressibility": [expressible()],
             "editor": [json.dumps(state1)],
             "semantic_judge": [judgment()],
         })
-        wf = WorldIRWorkflow(
+        result = WorldIRWorkflow(
             llm=llm,
             prompts=PromptStore(ROOT / "prompts"),
             spec=IRSpec(ROOT / "config/world_ir_v0.json"),
             config=WorkflowConfig(),
-        )
-        result = wf.run("把教堂移到西北，房子改为20栋。", state0)
+        ).run("把教堂移到西北。", state0)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.ir["entities"][0]["location"], "northwest")
-        self.assertEqual(result.ir["distributions"][0]["count"], 20)
 
-
-    def test_deliberate_skips_planner_checker_by_default(self):
-        state0 = json.loads((ROOT / "examples/state0.json").read_text(encoding="utf-8"))
+    def test_planner_checker_remains_optional(self):
+        state0 = json.loads((ROOT / "examples/state0.json").read_text())
         plan = {
-            "goal": "make the forest feel closer to the settlement",
-            "preserve": ["coast", "forest", "main_road", "church", "houses", "trees"],
-            "changes": ["add sparse trees near main_road"],
+            "goal": "abstract goal",
+            "preserve": [],
+            "changes": [],
             "possible_ir_gaps": [],
         }
-        candidate = json.loads(json.dumps(state0))
-        candidate["distributions"].append({
-            "id": "trees_near_road",
-            "type": "tree",
-            "near": "main_road",
-            "density": "low",
-        })
-
-        # Intentionally no planner_checker response. If the checker is called,
-        # FakeLLM will fail the test.
         llm = FakeLLM({
             "router": [json.dumps({"route": "deliberate", "reason": "abstract"})],
             "planner": [json.dumps(plan)],
-            "expressibility": [json.dumps({"expressible": True, "reason": "supported", "unsupported": []})],
-            "editor": [json.dumps(candidate)],
-            "semantic_judge": [judgment()],
+            "expressibility": [expressible(False, ["abstract goal"])],
         })
-        wf = WorldIRWorkflow(
+        result = WorldIRWorkflow(
             llm=llm,
             prompts=PromptStore(ROOT / "prompts"),
             spec=IRSpec(ROOT / "config/world_ir_v0.json"),
             config=WorkflowConfig(),
-        )
-        result = wf.run("让森林更有侵入小镇的感觉。", state0)
-        self.assertEqual(result.status, "ok")
-        self.assertFalse(any(e.node == "planner_checker" for e in result.trace.events))
-
-    def test_deliberate_can_enable_planner_checker_loop(self):
-        state0 = json.loads((ROOT / "examples/state0.json").read_text(encoding="utf-8"))
-        plan1 = {
-            "goal": "abstract goal",
-            "preserve": [],
-            "changes": ["overly broad change"],
-            "possible_ir_gaps": [],
-        }
-        plan2 = {
-            "goal": "abstract goal",
-            "preserve": ["coast", "forest"],
-            "changes": ["add sparse trees near main_road"],
-            "possible_ir_gaps": [],
-        }
-        candidate = json.loads(json.dumps(state0))
-        candidate["distributions"].append({
-            "id": "trees_near_road",
-            "type": "tree",
-            "near": "main_road",
-            "density": "low",
-        })
-        llm = FakeLLM({
-            "router": [json.dumps({"route": "deliberate", "reason": "abstract"})],
-            "planner": [json.dumps(plan1), json.dumps(plan2)],
-            "planner_checker": [
-                json.dumps({"status": "retry", "critique": "too broad"}),
-                json.dumps({"status": "pass", "critique": ""}),
-            ],
-            "expressibility": [json.dumps({"expressible": True, "reason": "supported", "unsupported": []})],
-            "editor": [json.dumps(candidate)],
-            "semantic_judge": [judgment()],
-        })
-        wf = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v0.json"),
-            config=WorkflowConfig(use_planner_checker=True, planner_max_attempts=3),
-        )
-        result = wf.run("让整个世界更有从文明走向荒野的感觉。", state0)
-        self.assertEqual(result.status, "ok")
-        checker_events = [e for e in result.trace.events if e.node == "planner_checker"]
-        self.assertEqual(len(checker_events), 2)
-        self.assertEqual(result.detail["semantic_intent"], plan2)
-        judge_prompt = next(
-            event.prompt for event in result.trace.events
-            if event.node == "semantic_judge"
-        )
-        self.assertNotIn(plan2["goal"], judge_prompt)
-        self.assertNotIn("# Semantic intent", judge_prompt)
-
-    def test_ir_gap_stops_before_editor(self):
-        state0 = json.loads((ROOT / "examples/state0.json").read_text(encoding="utf-8"))
-        llm = FakeLLM({
-            "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
-            "expressibility": [json.dumps({
-                "expressible": False,
-                "reason": "Region has no relative south_of relation",
-                "unsupported": ["south_of(village, forest)"]
-            })],
-        })
-        wf = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v0.json"),
-            config=WorkflowConfig(),
-        )
-        result = wf.run("在森林南边增加一个村庄。", state0)
+        ).run("抽象修改", state0)
         self.assertEqual(result.status, "ir_gap")
-        self.assertIn("south_of(village, forest)", result.detail["expressibility"]["unsupported"])
+        self.assertNotIn("planner_checker", llm.calls)
 
 
-    def test_v2_loads_semantic_guidance(self):
-        spec = IRSpec(ROOT / "config/world_ir_v2.json")
-        self.assertIn("placement.anchor", spec.semantic_guidance)
-        self.assertIn("direction_of", spec.semantic_guidance)
-        self.assertIn("北边靠近道路有一个教堂", spec.semantic_guidance)
-
-    def test_v2_initial_prompt_injects_semantic_guidance(self):
-        state0 = json.loads((ROOT / "examples/state0_v2.json").read_text(encoding="utf-8"))
-        llm = FakeLLM({
-            "initial_translator": [json.dumps(state0)],
-            "semantic_judge": [judgment()],
-        })
-        wf = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
+class ClosedWorldWorkflowTests(unittest.TestCase):
+    def test_v2_loads_closed_world_catalog_and_guidance(self):
+        spec = IRSpec(V2_SPEC)
+        self.assertEqual(spec.catalog.version, "World Catalog V2")
+        self.assertEqual(
+            spec.catalog.allowed_types("Region"),
+            {"coastal_forest", "research_base", "snow_forest"},
         )
-        result = wf.run("北边靠近道路有一个教堂。")
-        self.assertEqual(result.status, "ok")
-        prompt = result.trace.events[0].prompt
-        self.assertIn("# Active World IR semantic guidance", prompt)
-        self.assertIn("anchor=north", prompt)
-        self.assertIn("not `direction_of road north`", prompt)
-        self.assertIn("if the Region label were hidden", prompt)
-        self.assertIn("minimal strongly implied, observable constituents", prompt)
-        self.assertIn('"tree": {', prompt)
-        self.assertIn("Never invent a new `type`", prompt)
-
-    def test_concept_realization_guidance_reaches_edit_passes(self):
-        prompts = PromptStore(ROOT / "prompts")
-        for name in ("planner", "editor", "expressibility", "semantic_judge"):
-            text = prompts.read(name)
-            self.assertIn("strongly implied", text, name)
-
-    def test_v2_guidance_uses_a_finite_vocabulary_without_composition_pairs(self):
-        spec = IRSpec(ROOT / "config/world_ir_v2.json")
-        guidance = spec.semantic_guidance
-        self.assertIn("## Controlled world vocabulary", guidance)
-        self.assertIsNotNone(spec.catalog)
-        self.assertEqual(spec.catalog.version, "World Catalog V1")
+        self.assertEqual(spec.catalog.allowed_types("Network"), {"path"})
         self.assertEqual(
             spec.catalog.allowed_types("Distribution"),
-            {"house", "tree", "tombstone", "lamp"},
+            {"tree", "grass", "shrub", "rock", "fallen_log"},
         )
-        self.assertIn("does not itself define composition policy", guidance)
-        self.assertNotIn("constituents", spec.catalog.data["types"]["Region"]["forest"])
-        self.assertNotIn("forest -> tree", guidance.lower())
-        self.assertNotIn("town -> house", guidance.lower())
+        self.assertEqual(
+            spec.catalog.canonical_type_for_alias("Region", "  SNOWY forest "),
+            "snow_forest",
+        )
+        self.assertEqual(
+            spec.catalog.canonical_type_for_alias("Region", "森林"),
+            "coastal_forest",
+        )
+        self.assertIsNone(
+            spec.catalog.canonical_type_for_alias("Region", "graveyard")
+        )
+        self.assertIn("closed-world capability model", spec.semantic_guidance.lower())
+        self.assertIn("catalog-defined default", spec.semantic_guidance.lower())
+        self.assertIn("allowed_regions", spec.semantic_guidance)
+        self.assertNotIn(
+            "use ordinary world knowledge and",
+            spec.semantic_guidance.lower(),
+        )
 
-    def test_v2_semantic_completion_policy_is_narrow_and_explicit(self):
-        guidance = IRSpec(ROOT / "config/world_ir_v2.json").semantic_guidance
-        self.assertIn("a forest normally needs repeated trees", guidance)
-        self.assertIn("a town or village normally needs repeated houses", guidance)
-        self.assertIn("a graveyard normally needs repeated tombstones", guidance)
-        self.assertIn("a coast does not imply a lighthouse", guidance)
-        self.assertIn("a swamp does not by itself imply trees or a landmark", guidance)
-        self.assertIn("never revisit unrelated existing Regions", guidance)
+    def test_closed_world_policy_reaches_all_semantic_passes(self):
+        prompts = PromptStore(ROOT / "prompts")
+        for name in (
+            "initial_translator",
+            "planner",
+            "planner_checker",
+            "expressibility",
+            "editor",
+            "semantic_judge",
+        ):
+            text = prompts.read(name).lower()
+            self.assertIn("catalog", text, name)
+            self.assertTrue(
+                "closed-world" in text or "closed world" in text,
+                name,
+            )
+        self.assertIn("declared alias", prompts.read("expressibility").lower())
+        self.assertIn("allowed_regions", prompts.read("editor"))
+        self.assertIn("do not approximate", prompts.read("initial_translator").lower())
 
-    def test_initial_new_distributions_receive_canonical_amount(self):
-        candidate = {
-            "regions": [],
-            "networks": [],
-            "entities": [],
-            "distributions": [
-                {"id": "default_trees", "type": "tree"},
-                {
-                    "id": "counted_trees",
-                    "type": "tree",
-                    "population": {
-                        "amount": {"mode": "count", "value": 12}
-                    },
-                },
-                {
-                    "id": "gradient_trees",
-                    "type": "tree",
-                    "population": {
-                        "density_profile": {
-                            "type": "gradient",
-                            "from": {
-                                "selector": {"type": "anchor", "value": "west"},
-                                "density": "low",
-                            },
-                            "to": {
-                                "selector": {"type": "anchor", "value": "east"},
-                                "density": "high",
-                            },
-                        }
-                    },
-                },
-            ],
-        }
+    def test_initial_prompt_injects_catalog_defaults(self):
+        candidate = archetype_world("coastal_forest")
         llm = FakeLLM({
+            "expressibility": [expressible()],
             "initial_translator": [json.dumps(candidate)],
             "semantic_judge": [judgment()],
         })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
-        )
-
-        result = workflow.run("生成三组树。")
-
+        result = workflow(llm).run("生成一片森林")
         self.assertEqual(result.status, "ok")
-        by_id = {item["id"]: item for item in result.ir["distributions"]}
-        self.assertEqual(
-            by_id["default_trees"]["population"]["amount"],
-            {"mode": "density", "value": "medium"},
-        )
-        self.assertEqual(
-            by_id["counted_trees"]["population"]["amount"],
-            {"mode": "count", "value": 12},
-        )
-        self.assertNotIn("amount", by_id["gradient_trees"]["population"])
-
-    def test_edit_defaults_only_new_distribution_amount(self):
-        current = json.loads(
-            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
-        )
-        current["distributions"][0].pop("population")
-        candidate = json.loads(json.dumps(current))
-        candidate["entities"][0]["placement"]["anchor"] = "south"
-        candidate["distributions"].append({"id": "new_lamps", "type": "lamp"})
-        llm = FakeLLM({
-            "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
-            "expressibility": [json.dumps({
-                "expressible": True,
-                "reason": "supported",
-                "unsupported": [],
-            })],
-            "editor": [json.dumps(candidate)],
-            "semantic_judge": [judgment()],
-        })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
-        )
-
-        result = workflow.run("把教堂移到南边，并增加路灯。", current)
-
-        self.assertEqual(result.status, "ok")
-        by_id = {item["id"]: item for item in result.ir["distributions"]}
-        self.assertNotIn("population", by_id["houses"])
-        self.assertEqual(
-            by_id["new_lamps"]["population"]["amount"],
-            {"mode": "density", "value": "medium"},
-        )
-
-    def test_coast_and_swamp_do_not_trigger_unsupported_completion(self):
-        candidate = {
-            "regions": [
-                {"id": "coast", "type": "coast"},
-                {"id": "swamp", "type": "swamp"},
-            ],
-            "networks": [],
-            "entities": [],
-            "distributions": [],
-        }
-        llm = FakeLLM({
-            "initial_translator": [json.dumps(candidate)],
-            "semantic_judge": [judgment()],
-        })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
-        )
-
-        result = workflow.run("生成一片海岸和一片沼泽。")
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(result.ir["entities"], [])
-        self.assertEqual(result.ir["distributions"], [])
-        translator_prompt = result.trace.events[0].prompt
-        self.assertIn("coast, swamp, field, or district", translator_prompt)
-
-    def test_unrelated_edit_does_not_expand_existing_swamp(self):
-        current = json.loads(
-            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
-        )
-        current["regions"].append({"id": "old_swamp", "type": "swamp"})
-        candidate = json.loads(json.dumps(current))
-        candidate["entities"][0]["placement"]["anchor"] = "south"
-        llm = FakeLLM({
-            "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
-            "expressibility": [json.dumps({
-                "expressible": True,
-                "reason": "supported",
-                "unsupported": [],
-            })],
-            "editor": [json.dumps(candidate)],
-            "semantic_judge": [judgment()],
-        })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
-        )
-
-        result = workflow.run("只把教堂移到南边。", current)
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(
-            [item for item in result.ir["regions"] if item["id"] == "old_swamp"],
-            [{"id": "old_swamp", "type": "swamp"}],
-        )
-        self.assertFalse(any(
-            relation.get("target") == "old_swamp"
-            for item in result.ir["distributions"] + result.ir["entities"]
-            for relation in item.get("placement", {}).get("relations", [])
-        ))
-        editor_prompt = next(
-            prompt for node, prompt in zip(llm.calls, llm.prompts)
-            if node == "editor"
-        )
-        self.assertIn("Never expand unrelated existing Regions", editor_prompt)
-
-    def test_initial_semantic_judge_retries_with_independent_feedback(self):
-        complete = json.loads(
-            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
-        )
-        incomplete = json.loads(json.dumps(complete))
-        incomplete["distributions"] = [
-            item for item in incomplete["distributions"] if item["type"] != "tree"
-        ]
-        llm = FakeLLM({
-            "initial_translator": [json.dumps(incomplete), json.dumps(complete)],
-            "semantic_judge": [
-                judgment(
-                    "retry",
-                    critique="Add observable vegetation from the catalog.",
-                    missing=["The requested forest has no observable realization."],
-                ),
-                judgment(),
-            ],
-        })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
-        )
-
-        result = workflow.run("西边有一片森林。")
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(llm.calls.count("initial_translator"), 2)
-        second_prompt = [
+        translator_prompt = next(
             prompt for node, prompt in zip(llm.calls, llm.prompts)
             if node == "initial_translator"
-        ][1]
-        self.assertIn("Independent Semantic Judge feedback", second_prompt)
-        self.assertIn("observable vegetation", second_prompt)
-
-    def test_semantic_judge_uses_a_separate_client_and_blind_context(self):
-        state0 = json.loads(
-            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
         )
-        generator = FakeLLM({"initial_translator": [json.dumps(state0)]})
-        judge = FakeLLM({"semantic_judge": [judgment()]})
-        workflow = WorldIRWorkflow(
-            llm=generator,
-            judge_llm=judge,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
+        self.assertIn('"default_realization"', translator_prompt)
+        self.assertIn('"coastal_forest"', translator_prompt)
+        self.assertIn("catalog-defined default realization", translator_prompt)
+
+    def test_initial_normalization_and_default_realization(self):
+        cases = (
+            ("生成一片森林", "coastal_forest"),
+            ("生成一片 snowy forest", "snow_forest"),
+            ("生成一个 research facility", "research_base"),
         )
+        for prompt, region_type in cases:
+            with self.subTest(region_type=region_type):
+                candidate = archetype_world(region_type)
+                llm = FakeLLM({
+                    "expressibility": [expressible()],
+                    "initial_translator": [json.dumps(candidate)],
+                    "semantic_judge": [judgment()],
+                })
+                result = workflow(llm).run(prompt)
+                self.assertEqual(result.status, "ok")
+                self.assertEqual(result.ir["regions"][0]["type"], region_type)
+                expected = IRSpec(V2_SPEC).catalog.default_realization(region_type)
+                self.assertEqual(
+                    {item["type"] for item in result.ir["entities"]},
+                    {item["type"] for item in expected["entities"]},
+                )
+                actual_amounts = {
+                    item["type"]: item["population"]["amount"]
+                    for item in result.ir["distributions"]
+                }
+                self.assertEqual(
+                    actual_amounts,
+                    {
+                        item["type"]: item["population"]["amount"]
+                        for item in expected["distributions"]
+                    },
+                )
 
-        result = workflow.run("西边有森林，东边有海岸。")
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(generator.calls, ["initial_translator"])
-        self.assertEqual(judge.calls, ["semantic_judge"])
-        self.assertIn("# Original User Request", judge.prompts[0])
-        self.assertNotIn("# Semantic intent", judge.prompts[0])
-        self.assertNotIn("# Planner output", judge.prompts[0])
-
-    def test_initial_semantic_judge_can_report_ir_gap(self):
-        state0 = json.loads(
-            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
+    def test_snow_forest_explicit_overrides_are_preserved(self):
+        cases = (
+            (
+                "生成一片雪森林，但是不要木屋",
+                archetype_world("snow_forest", excluded_entities={"cabin"}),
+                lambda ir: self.assertNotIn(
+                    "cabin", {item["type"] for item in ir["entities"]}
+                ),
+            ),
+            (
+                "生成一片树很少的雪森林",
+                archetype_world(
+                    "snow_forest", density_overrides={"tree": "low"}
+                ),
+                lambda ir: self.assertEqual(
+                    next(
+                        item for item in ir["distributions"]
+                        if item["type"] == "tree"
+                    )["population"]["amount"]["value"],
+                    "low",
+                ),
+            ),
         )
+        for prompt, candidate, assertion in cases:
+            with self.subTest(prompt=prompt):
+                llm = FakeLLM({
+                    "expressibility": [expressible()],
+                    "initial_translator": [json.dumps(candidate)],
+                    "semantic_judge": [judgment()],
+                })
+                result = workflow(llm).run(prompt)
+                self.assertEqual(result.status, "ok")
+                assertion(result.ir)
+
+    def test_unsupported_initial_concepts_stop_at_capability_gate(self):
+        cases = (
+            ("生成一片沙漠", "desert"),
+            ("生成一个墓地", "graveyard"),
+            ("生成一个中世纪小镇", "medieval_town"),
+            ("生成一个没有雪的松树林", "non_snow_pine_forest"),
+        )
+        for prompt, unsupported in cases:
+            with self.subTest(unsupported=unsupported):
+                llm = FakeLLM({
+                    "expressibility": [expressible(False, [unsupported])],
+                })
+                result = workflow(llm).run(prompt)
+                self.assertEqual(result.status, "ir_gap")
+                self.assertEqual(llm.calls, ["expressibility"])
+                self.assertEqual(
+                    result.detail["expressibility"]["unsupported"],
+                    [unsupported],
+                )
+
+    def test_initial_new_distributions_receive_canonical_amount(self):
+        candidate = archetype_world("coastal_forest")
+        candidate["distributions"].extend([
+            {
+                "id": "default_logs",
+                "type": "fallen_log",
+                "placement": {
+                    "relations": [{"type": "inside", "target": "environment"}]
+                },
+            },
+            {
+                "id": "gradient_logs",
+                "type": "fallen_log",
+                "placement": {
+                    "relations": [{"type": "inside", "target": "environment"}]
+                },
+                "population": {
+                    "density_profile": {
+                        "type": "gradient",
+                        "from": {
+                            "selector": {"type": "anchor", "value": "west"},
+                            "density": "low",
+                        },
+                        "to": {
+                            "selector": {"type": "anchor", "value": "east"},
+                            "density": "high",
+                        },
+                    }
+                },
+            },
+        ])
         llm = FakeLLM({
-            "initial_translator": [json.dumps(state0)],
-            "semantic_judge": [judgment(
-                "ir_gap",
-                critique="The requested exact distance has no IR representation.",
-                unsupported=["exact_distance(forest, coast, 50m)"],
-            )],
+            "expressibility": [expressible()],
+            "initial_translator": [json.dumps(candidate)],
+            "semantic_judge": [judgment()],
         })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
-        )
-
-        result = workflow.run("森林必须距离海岸精确五十米。")
-
-        self.assertEqual(result.status, "ir_gap")
-        self.assertEqual(result.detail["mode"], "initial")
+        result = workflow(llm).run("生成森林并增加倒木")
+        by_id = {item["id"]: item for item in result.ir["distributions"]}
         self.assertEqual(
-            result.detail["expressibility"]["unsupported"],
-            ["exact_distance(forest, coast, 50m)"],
+            by_id["default_logs"]["population"]["amount"],
+            {"mode": "density", "value": "medium"},
         )
+        self.assertNotIn("amount", by_id["gradient_logs"]["population"])
 
-    def test_edit_semantic_judge_retries_editor(self):
-        state0 = json.loads(
-            (ROOT / "examples/state0_v2.json").read_text(encoding="utf-8")
-        )
-        wrong = json.loads(json.dumps(state0))
-        wrong["regions"][1]["placement"] = {"anchor": "east"}
-        corrected = json.loads(json.dumps(state0))
-        corrected["regions"][1]["placement"] = {"anchor": "west"}
-        draft_wrong = {
-            "world_ir": wrong,
-            "runtime_bindings": [],
-            "runtime_fact_ops": [],
-        }
-        draft_corrected = {
-            "world_ir": corrected,
-            "runtime_bindings": [],
-            "runtime_fact_ops": [],
-        }
+    def test_replace_coastal_forest_with_snow_forest(self):
+        current = archetype_world("coastal_forest", region_id="east_region")
+        current["entities"].append({
+            "id": "existing_cabin",
+            "type": "cabin",
+            "placement": {
+                "relations": [{"type": "inside", "target": "east_region"}]
+            },
+        })
+        candidate = archetype_world("snow_forest", region_id="east_region")
+        candidate["entities"] = [
+            item for item in candidate["entities"] if item["type"] != "cabin"
+        ] + [copy.deepcopy(current["entities"][-1])]
+        draft = {"world_ir": candidate, "runtime_bindings": [], "runtime_fact_ops": []}
         llm = FakeLLM({
             "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
-            "expressibility": [json.dumps({
-                "expressible": True,
-                "reason": "supported",
-                "unsupported": [],
-            })],
-            "editor": [json.dumps(draft_wrong), json.dumps(draft_corrected)],
-            "semantic_judge": [
-                judgment(
-                    "retry",
-                    critique="The forest must use the world-west anchor.",
-                ),
-                judgment(),
-            ],
+            "expressibility": [expressible()],
+            "editor": [json.dumps(draft)],
+            "semantic_judge": [judgment()],
         })
-        workflow = WorldIRWorkflow(
-            llm=llm,
-            prompts=PromptStore(ROOT / "prompts"),
-            spec=IRSpec(ROOT / "config/world_ir_v2.json"),
-            config=WorkflowConfig(),
+        result = workflow(llm).run("把这片森林变成雪森林", current)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.ir["regions"][0]["id"], "east_region")
+        self.assertEqual(result.ir["regions"][0]["placement"], {"anchor": "west"})
+        self.assertEqual(result.ir["regions"][0]["type"], "snow_forest")
+        entity_types = [item["type"] for item in result.ir["entities"]]
+        self.assertEqual(entity_types.count("cabin"), 1)
+        self.assertIn("ruined_archway", entity_types)
+        self.assertNotIn("rowboat", entity_types)
+        self.assertNotIn(
+            "grass", {item["type"] for item in result.ir["distributions"]}
         )
 
-        result = workflow.run("把森林放在世界西边。", state0)
+    def test_remove_default_then_unrelated_edit_does_not_restore_it(self):
+        current = archetype_world("snow_forest")
+        without_cabin = copy.deepcopy(current)
+        without_cabin["entities"] = [
+            item for item in without_cabin["entities"] if item["type"] != "cabin"
+        ]
+        fewer_rocks = copy.deepcopy(without_cabin)
+        rock = next(
+            item for item in fewer_rocks["distributions"] if item["type"] == "rock"
+        )
+        rock["population"]["amount"]["value"] = "medium"
+        drafts = [
+            {"world_ir": without_cabin, "runtime_bindings": [], "runtime_fact_ops": []},
+            {"world_ir": fewer_rocks, "runtime_bindings": [], "runtime_fact_ops": []},
+        ]
+        llm = FakeLLM({
+            "router": [
+                json.dumps({"route": "bypass", "reason": "explicit"}),
+                json.dumps({"route": "bypass", "reason": "explicit"}),
+            ],
+            "expressibility": [expressible(), expressible()],
+            "editor": [json.dumps(item) for item in drafts],
+            "semantic_judge": [judgment(), judgment()],
+        })
+        wf = workflow(llm)
+        first = wf.run("删除木屋", current)
+        second = wf.run("把石头减少一点", first.ir)
+        self.assertEqual(second.status, "ok")
+        self.assertNotIn(
+            "cabin", {item["type"] for item in second.ir["entities"]}
+        )
 
+    def test_compatible_explicit_entities_can_be_added(self):
+        cases = (
+            ("snow_forest", "maritime_memorial"),
+            ("coastal_forest", "tent"),
+            ("research_base", "radiation_warning_sign"),
+        )
+        for region_type, entity_type in cases:
+            with self.subTest(entity_type=entity_type):
+                current = archetype_world(region_type)
+                candidate = copy.deepcopy(current)
+                candidate["entities"].append({
+                    "id": f"new_{entity_type}",
+                    "type": entity_type,
+                    "placement": {
+                        "relations": [{"type": "inside", "target": "environment"}]
+                    },
+                })
+                draft = {
+                    "world_ir": candidate,
+                    "runtime_bindings": [],
+                    "runtime_fact_ops": [],
+                }
+                llm = FakeLLM({
+                    "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
+                    "expressibility": [expressible()],
+                    "editor": [json.dumps(draft)],
+                    "semantic_judge": [judgment()],
+                })
+                result = workflow(llm).run(f"增加 {entity_type}", current)
+                self.assertEqual(result.status, "ok")
+
+    def test_incompatible_explicit_request_is_ir_gap_before_editor(self):
+        current = archetype_world("snow_forest")
+        llm = FakeLLM({
+            "router": [json.dumps({"route": "bypass", "reason": "explicit"})],
+            "expressibility": [expressible(False, ["rowboat inside snow_forest"])],
+        })
+        result = workflow(llm).run("在雪森林里增加一艘划艇", current)
+        self.assertEqual(result.status, "ir_gap")
+        self.assertNotIn("editor", llm.calls)
+
+    def test_semantic_judge_uses_separate_blind_context(self):
+        candidate = archetype_world("coastal_forest")
+        generator = FakeLLM({
+            "expressibility": [expressible()],
+            "initial_translator": [json.dumps(candidate)],
+        })
+        judge = FakeLLM({"semantic_judge": [judgment()]})
+        result = workflow(generator, judge_llm=judge).run("生成一片森林")
         self.assertEqual(result.status, "ok")
-        self.assertEqual(llm.calls.count("editor"), 2)
-        second_editor_prompt = [
-            prompt for node, prompt in zip(llm.calls, llm.prompts)
-            if node == "editor"
-        ][1]
-        self.assertIn("Independent Semantic Judge feedback", second_editor_prompt)
-        self.assertIn("world-west anchor", second_editor_prompt)
+        self.assertEqual(generator.calls, ["expressibility", "initial_translator"])
+        self.assertEqual(judge.calls, ["semantic_judge"])
+        self.assertNotIn("# Semantic intent", judge.prompts[0])
+        self.assertNotIn("# Planner output", judge.prompts[0])
 
 
 if __name__ == "__main__":

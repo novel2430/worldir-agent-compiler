@@ -7,6 +7,10 @@
 
 User Prompt
    ↓
+Initial Expressibility
+   ├─ NO → IR GAP
+   └─ YES
+       ↓
 Initial Translator
    ↓
 Deterministic Validator
@@ -110,7 +114,7 @@ python -m worldir_agent \
 
 ```bash
 python -m worldir_agent \
-  --prompt '做一个海边小镇，森林在西边，海岸在东边。'
+  --prompt '做一个西边的海岸森林和东边的废弃研究基地，中间有一条小路。'
 ```
 
 ---
@@ -120,7 +124,7 @@ python -m worldir_agent \
 ```bash
 python -m worldir_agent \
   --config config/config.toml \
-  --state examples/state0.json \
+  --state examples/state0_v2.json \
   --prompt-file examples/prompt_edit_explicit.txt \
   --out runs/state1.json \
   --trace runs/state1.trace.json
@@ -131,7 +135,7 @@ python -m worldir_agent \
 ```bash
 python -m worldir_agent \
   --state-json '{"regions":[],"networks":[],"entities":[],"distributions":[]}' \
-  --prompt '增加一个位于北边的教堂。'
+  --prompt '增加一片位于北边的雪森林。'
 ```
 
 规则很简单：
@@ -269,10 +273,12 @@ reference 类型
 World IR V2 还通过：
 
 ```text
-config/world_catalog_v1.json
+config/world_catalog_v2.json
 ```
 
-声明当前后端可生成的有限类型及通用语义角色。Catalog 是 Prompt 与确定性类型校验共享的唯一来源；它不保存 `forest → tree` 一类固定组合映射。复合概念是否被充分实现由独立 Semantic Judge 根据原始用户请求判断。
+声明当前后端真正支持的 closed-world semantic contract。Catalog 是 Prompt 与确定性类型校验共享的唯一来源，并同时保存 canonical types、有限 aliases、`allowed_regions` compatibility 和 Region activation-time `default_realization`。语义 realization 不再依赖 ordinary-world knowledge。
+
+当前 Region archetypes 只有 `coastal_forest`、`research_base`、`snow_forest`；Network 只有 `path`。没有 canonical type 或明确 alias 的概念返回 IR GAP，禁止 nearest-profile approximation。
 
 World IR 与 World Catalog 独立版本化；Server `/info` 分别暴露
 `world_ir_version` 与 `world_catalog_version`，Catalog vocabulary 不属于
@@ -293,21 +299,15 @@ prompts/*.md
 
 例如：
 
-> 在森林南边增加一个村庄。
+> 生成一个墓地。
 
-如果当前 Region 只有：
-
-```text
-location = north/south/east/west/...
-```
-
-而没有表达：
+如果 active Catalog 只有：
 
 ```text
-south_of(village, forest)
+coastal_forest / research_base / snow_forest
 ```
 
-那么正确结果允许是：
+而没有 canonical `graveyard` 或明确 alias，正确结果是：
 
 ```json
 {
@@ -316,7 +316,7 @@ south_of(village, forest)
     "expressibility": {
       "expressible": false,
       "unsupported": [
-        "south_of(village, forest)"
+        "graveyard"
       ]
     }
   }
@@ -326,7 +326,7 @@ south_of(village, forest)
 Workflow 不应该强迫 Planner 把它偷换成：
 
 ```text
-village.location = south
+research_base
 ```
 
 否则 IR language 本身的问题会被 LLM 的聪明 approximation 隐藏。
@@ -449,23 +449,23 @@ semantic fidelity / expressibility
 
 ## 11. 建议现在直接跑的 Case
 
-使用 `examples/state0.json`：
+使用 `examples/state0_v2.json`：
 
 ```text
 Explicit:
-把教堂移到西北边，房子增加到20栋，其他保持不变。
+在海岸森林里增加一个帐篷。
 
-Structural:
-让主路先经过教堂，再继续通向北边。
+Region replacement:
+把西边的海岸森林变成雪森林。
 
 Expected IR GAP:
-在森林南边增加一个小村庄，其他内容保持不变。
+在雪森林里增加一艘划艇。
 
-Abstract / compositional:
-让森林有一种逐渐侵入小镇的感觉，一些树木应该开始出现在主路附近，但西边仍然是主要森林区域。
+Default override:
+生成一片雪森林，但是不要木屋。
 
 Highly abstract:
-让整个世界更有“从文明逐渐走向荒野”的空间感觉，但不要改变海岸在东边、森林在西边这两个基本事实。
+让环境稍微更冷一点，但不要进入完整雪森林状态（当前会成为 possible IR GAP）。
 ```
 
 建议每次保留：
@@ -499,11 +499,11 @@ python -m unittest discover -s tests -v
 
 当前测试包含：
 
-- State0 schema/reference validation
-- `via: "church"` 会被抓出来，要求 array
-- broken reference 会被抓出来
-- explicit bypass workflow
-- expressibility → IR GAP 会在 Editor 前停止
+- Catalog metadata/cross-reference validation
+- exactly-one Region owner 与 `allowed_regions` compatibility
+- Region nesting prohibition
+- Catalog-driven defaults、override、replacement 与 no-regrow
+- initial/edit expressibility → IR GAP
 
 ### OneAPI 真实模型配置
 

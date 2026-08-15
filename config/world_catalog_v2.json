@@ -1,0 +1,221 @@
+{
+  "version": "World Catalog V2",
+  "types": {
+    "Region": {
+      "coastal_forest": {
+        "roles": ["environment_region"],
+        "aliases": [
+          "forest",
+          "temperate forest",
+          "coastal forest",
+          "seaside forest",
+          "bright forest",
+          "森林",
+          "普通森林",
+          "温带森林",
+          "海岸森林",
+          "海边森林"
+        ],
+        "default_realization": {
+          "entities": [
+            {"type": "rowboat"}
+          ],
+          "distributions": [
+            {
+              "type": "tree",
+              "population": {"amount": {"mode": "density", "value": "high"}}
+            },
+            {
+              "type": "grass",
+              "population": {"amount": {"mode": "density", "value": "high"}}
+            },
+            {
+              "type": "shrub",
+              "population": {"amount": {"mode": "density", "value": "medium"}}
+            },
+            {
+              "type": "rock",
+              "population": {"amount": {"mode": "density", "value": "low"}}
+            }
+          ]
+        }
+      },
+      "research_base": {
+        "roles": ["environment_region"],
+        "aliases": [
+          "research base",
+          "abandoned research base",
+          "research facility",
+          "abandoned research facility",
+          "industrial research base",
+          "radar research base",
+          "研究基地",
+          "废弃研究基地",
+          "研究设施",
+          "废弃研究设施"
+        ],
+        "default_realization": {
+          "entities": [
+            {"type": "research_station"},
+            {"type": "radar_tower"},
+            {"type": "cargo_truck"},
+            {"type": "tidal_danger_sign"},
+            {"type": "crate"}
+          ],
+          "distributions": [
+            {
+              "type": "tree",
+              "population": {"amount": {"mode": "density", "value": "low"}}
+            },
+            {
+              "type": "grass",
+              "population": {"amount": {"mode": "density", "value": "low"}}
+            },
+            {
+              "type": "shrub",
+              "population": {"amount": {"mode": "density", "value": "low"}}
+            },
+            {
+              "type": "rock",
+              "population": {"amount": {"mode": "density", "value": "medium"}}
+            }
+          ]
+        }
+      },
+      "snow_forest": {
+        "roles": ["environment_region"],
+        "aliases": [
+          "snow forest",
+          "snowy forest",
+          "winter forest",
+          "cold conifer forest",
+          "雪林",
+          "雪森林",
+          "冬季森林",
+          "积雪森林",
+          "冰雪针叶林"
+        ],
+        "default_realization": {
+          "entities": [
+            {"type": "cabin"},
+            {"type": "ruined_archway"}
+          ],
+          "distributions": [
+            {
+              "type": "tree",
+              "population": {"amount": {"mode": "density", "value": "high"}}
+            },
+            {
+              "type": "shrub",
+              "population": {"amount": {"mode": "density", "value": "low"}}
+            },
+            {
+              "type": "rock",
+              "population": {"amount": {"mode": "density", "value": "high"}}
+            }
+          ]
+        }
+      }
+    },
+    "Network": {
+      "path": {
+        "roles": ["transport_network"],
+        "aliases": ["trail", "footpath", "小路", "路径", "步道"]
+      }
+    },
+    "Entity": {
+      "rowboat": {
+        "roles": ["vehicle", "hero_object"],
+        "aliases": ["row boat", "rowing boat", "划艇", "小划艇"],
+        "allowed_regions": ["coastal_forest"]
+      },
+      "tent": {
+        "roles": ["shelter", "supporting_object"],
+        "aliases": ["帐篷"],
+        "allowed_regions": ["coastal_forest"]
+      },
+      "cabin": {
+        "roles": ["building", "hero_object"],
+        "aliases": ["wooden cabin", "log cabin", "木屋", "小木屋"],
+        "allowed_regions": ["coastal_forest", "snow_forest"]
+      },
+      "research_station": {
+        "roles": ["building", "hero_object"],
+        "aliases": ["research station", "研究站"],
+        "allowed_regions": ["research_base"]
+      },
+      "radar_tower": {
+        "roles": ["structure", "landmark"],
+        "aliases": ["radar tower", "雷达塔"],
+        "allowed_regions": ["research_base"]
+      },
+      "radiation_warning_sign": {
+        "roles": ["sign", "supporting_object"],
+        "aliases": ["radiation warning sign", "辐射警告牌", "辐射警告标志"],
+        "allowed_regions": ["research_base"]
+      },
+      "tidal_danger_sign": {
+        "roles": ["sign", "supporting_object"],
+        "aliases": ["tidal danger sign", "潮汐危险警告牌", "潮汐危险标志"],
+        "allowed_regions": ["research_base"]
+      },
+      "cargo_truck": {
+        "roles": ["vehicle", "supporting_object"],
+        "aliases": ["cargo truck", "freight truck", "货运卡车", "货车"],
+        "allowed_regions": ["research_base"]
+      },
+      "crate": {
+        "roles": ["container", "supporting_object"],
+        "aliases": ["wooden crate", "木箱", "货箱"],
+        "allowed_regions": ["research_base"]
+      },
+      "maritime_memorial": {
+        "roles": ["memorial", "landmark"],
+        "aliases": ["maritime memorial", "海事纪念碑"],
+        "allowed_regions": ["snow_forest"]
+      },
+      "ruined_archway": {
+        "roles": ["ruin", "landmark"],
+        "aliases": ["ruined archway", "ruined arch", "废墟拱门", "残破拱门"],
+        "allowed_regions": ["snow_forest"]
+      },
+      "bunker": {
+        "roles": ["structure", "supporting_object"],
+        "aliases": ["掩体", "地堡"],
+        "allowed_regions": ["snow_forest"]
+      },
+      "concrete_wall": {
+        "roles": ["structure", "supporting_object"],
+        "aliases": ["concrete wall", "混凝土墙"],
+        "allowed_regions": ["snow_forest"]
+      }
+    },
+    "Distribution": {
+      "tree": {
+        "roles": ["vegetation", "semantic_population"],
+        "aliases": ["trees", "树", "树木"],
+        "allowed_regions": ["coastal_forest", "research_base", "snow_forest"]
+      },
+      "grass": {
+        "roles": ["vegetation", "semantic_population"],
+        "aliases": ["grasses", "草", "草地植被"],
+        "allowed_regions": ["coastal_forest", "research_base"]
+      },
+      "shrub": {
+        "roles": ["vegetation", "semantic_population"],
+        "aliases": ["shrubs", "bush", "bushes", "灌木", "灌木丛"],
+        "allowed_regions": ["coastal_forest", "research_base", "snow_forest"]
+      },
+      "rock": {
+        "roles": ["natural_object", "semantic_population"],
+        "aliases": ["rocks", "stone", "stones", "岩石", "石头"],
+        "allowed_regions": ["coastal_forest", "research_base", "snow_forest"]
+      },
+      "fallen_log": {
+        "roles": ["natural_object", "semantic_population"],
+        "aliases": ["fallen log", "fallen logs", "倒木", "倒下的原木"],
+        "allowed_regions": ["coastal_forest"]
+      }
+    }
+  }
+}

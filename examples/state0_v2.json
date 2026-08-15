@@ -1,81 +1,135 @@
 {
   "regions": [
     {
-      "id": "coast",
-      "type": "coast",
-      "placement": {
-        "anchor": "east"
-      }
+      "id": "coastal_forest",
+      "type": "coastal_forest",
+      "placement": {"anchor": "west"}
     },
     {
-      "id": "forest",
-      "type": "forest",
-      "placement": {
-        "anchor": "west"
-      }
+      "id": "research_base",
+      "type": "research_base",
+      "placement": {"anchor": "east"}
     }
   ],
   "networks": [
     {
-      "id": "main_road",
-      "type": "road",
+      "id": "main_path",
+      "type": "path",
       "topology": {
         "from": "south",
+        "via": ["research_base"],
         "to": "north"
       }
     }
   ],
   "entities": [
     {
-      "id": "church",
-      "type": "church",
+      "id": "rowboat",
+      "type": "rowboat",
       "placement": {
-        "anchor": "north",
-        "relations": [
-          {
-            "type": "near",
-            "target": "main_road"
-          }
-        ]
+        "relations": [{"type": "inside", "target": "coastal_forest"}]
+      }
+    },
+    {
+      "id": "research_station",
+      "type": "research_station",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      }
+    },
+    {
+      "id": "radar_tower",
+      "type": "radar_tower",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      }
+    },
+    {
+      "id": "cargo_truck",
+      "type": "cargo_truck",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      }
+    },
+    {
+      "id": "tidal_danger_sign",
+      "type": "tidal_danger_sign",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      }
+    },
+    {
+      "id": "crate",
+      "type": "crate",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
       }
     }
   ],
   "distributions": [
     {
-      "id": "houses",
-      "type": "house",
-      "placement": {
-        "relations": [
-          {
-            "type": "along",
-            "target": "main_road"
-          }
-        ]
-      },
-      "population": {
-        "amount": {
-          "mode": "count",
-          "value": 12
-        }
-      }
-    },
-    {
-      "id": "trees",
+      "id": "coastal_trees",
       "type": "tree",
       "placement": {
-        "relations": [
-          {
-            "type": "inside",
-            "target": "forest"
-          }
-        ]
+        "relations": [{"type": "inside", "target": "coastal_forest"}]
       },
-      "population": {
-        "amount": {
-          "mode": "density",
-          "value": "high"
-        }
-      }
+      "population": {"amount": {"mode": "density", "value": "high"}}
+    },
+    {
+      "id": "coastal_grass",
+      "type": "grass",
+      "placement": {
+        "relations": [{"type": "inside", "target": "coastal_forest"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "high"}}
+    },
+    {
+      "id": "coastal_shrubs",
+      "type": "shrub",
+      "placement": {
+        "relations": [{"type": "inside", "target": "coastal_forest"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "medium"}}
+    },
+    {
+      "id": "coastal_rocks",
+      "type": "rock",
+      "placement": {
+        "relations": [{"type": "inside", "target": "coastal_forest"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "low"}}
+    },
+    {
+      "id": "base_trees",
+      "type": "tree",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "low"}}
+    },
+    {
+      "id": "base_grass",
+      "type": "grass",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "low"}}
+    },
+    {
+      "id": "base_shrubs",
+      "type": "shrub",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "low"}}
+    },
+    {
+      "id": "base_rocks",
+      "type": "rock",
+      "placement": {
+        "relations": [{"type": "inside", "target": "research_base"}]
+      },
+      "population": {"amount": {"mode": "density", "value": "medium"}}
     }
   ]
 }

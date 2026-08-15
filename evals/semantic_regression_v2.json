@@ -1,0 +1,24 @@
+{
+  "version": "Semantic Regression Inputs V2",
+  "description": "Closed-world, Catalog V2 input-only cases. Acceptance is decided by the compiler passes; this suite intentionally contains no expected IR snapshots.",
+  "cases": [
+    {"id": "bare_forest_normalizes_to_coastal_forest", "prompt": "生成一片森林。", "current_ir": null},
+    {"id": "snowy_forest_normalizes_to_snow_forest", "prompt": "生成一片 snowy forest。", "current_ir": null},
+    {"id": "research_facility_normalizes_to_research_base", "prompt": "生成一个废弃研究设施。", "current_ir": null},
+    {"id": "coastal_forest_gets_catalog_realization", "prompt": "生成一片海岸森林。", "current_ir": null},
+    {"id": "research_base_gets_catalog_realization", "prompt": "生成一个研究基地。", "current_ir": null},
+    {"id": "snow_forest_gets_catalog_realization", "prompt": "生成一片雪森林。", "current_ir": null},
+    {"id": "snow_forest_without_cabin_respects_exception", "prompt": "生成一片雪森林，但是不要木屋。", "current_ir": null},
+    {"id": "snow_forest_sparse_trees_overrides_default_density", "prompt": "生成一片树很少的雪森林。", "current_ir": null},
+    {"id": "initial_desert_is_ir_gap", "prompt": "生成一片沙漠。", "current_ir": null},
+    {"id": "initial_graveyard_is_ir_gap", "prompt": "生成一个墓地。", "current_ir": null},
+    {"id": "initial_medieval_town_is_ir_gap", "prompt": "生成一个中世纪小镇。", "current_ir": null},
+    {"id": "initial_non_snow_pine_forest_gap", "prompt": "生成一片没有雪的松树林。", "current_ir": null},
+    {"id": "replace_coastal_forest_with_snow_forest", "prompt": "把西边的海岸森林变成雪森林。", "current_ir_file": "../examples/state0_v2.json"},
+    {"id": "remove_default_then_unrelated_edit_does_not_restore_it", "prompt": "把石头减少一点，其他内容保持不变。", "current_ir_file": "../examples/snow_forest_without_cabin_v2.json"},
+    {"id": "add_memorial_to_snow_forest", "prompt": "在雪森林里增加一座海事纪念碑。", "current_ir_file": "../examples/snow_forest_without_cabin_v2.json"},
+    {"id": "add_tent_to_coastal_forest", "prompt": "在海岸森林里增加一个帐篷。", "current_ir_file": "../examples/state0_v2.json"},
+    {"id": "add_radiation_warning_sign_to_research_base", "prompt": "在研究基地增加一个辐射警告牌。", "current_ir_file": "../examples/state0_v2.json"},
+    {"id": "add_rowboat_to_snow_forest_is_ir_gap", "prompt": "在雪森林里增加一艘划艇。", "current_ir_file": "../examples/snow_forest_without_cabin_v2.json"}
+  ]
+}

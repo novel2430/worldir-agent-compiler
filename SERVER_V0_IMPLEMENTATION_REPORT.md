@@ -4,7 +4,7 @@
 
 The compiler has since added a larger semantic-control mechanism:
 
-- `config/world_catalog_v1.json` is now the machine-readable source of allowed World IR V2 object types and generic roles.
+- `config/world_catalog_v2.json` is now the machine-readable closed-world source of allowed World IR V2 types, aliases, Region compatibility, and activation defaults; V1 is retained as history.
 - Deterministic World IR validation rejects Catalog-external types but contains no concept-to-constituent composition mappings.
 - Initial generation and edit compilation both use an independent-context `semantic_judge` LLM pass. The Judge sees the original request and formal contracts, but never sees Planner output, Semantic Intent, Generator prompts, or Generator reasoning.
 - Judge `retry` feedback is returned to the Initial Translator or Editor within their bounded retry loops; Judge `ir_gap` becomes a normal Compile Result IR GAP.
