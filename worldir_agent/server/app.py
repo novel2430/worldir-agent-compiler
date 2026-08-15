@@ -39,6 +39,13 @@ from .models import (
     IRGap,
     InfoResult,
 )
+from ..backend.models import SpatialPlanRequest, SpatialPlanResult
+from ..backend.spatial_lowerer import SpatialLowerer, SpatialLoweringInvalidIR
+from ..demo.mock_intent import (
+    DemoInterpretRequest,
+    DemoInterpretResult,
+    interpret_demo_prompt,
+)
 
 
 class CompilerProtocol(Protocol):
@@ -119,9 +126,12 @@ def create_app(
     *,
     trace_writer: ServerTraceWriter | None = None,
     compile_cache: CompileCache | None = None,
+    spatial_lowerer: SpatialLowerer | None = None,
+    enable_demo_intent: bool = False,
 ) -> FastAPI:
     app = FastAPI(title="WorldIR LLM Compiler Server", version="0.3.0")
     compiler_fingerprint = getattr(compiler, "fingerprint", "unspecified")
+    lowerer = spatial_lowerer or SpatialLowerer.default()
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(
@@ -185,6 +195,31 @@ def create_app(
             runtime_context_version="1",
             compile_result_version="1",
         )
+
+    @app.post(
+        "/v1/backend/plan",
+        response_model=SpatialPlanResult,
+        response_model_exclude_none=True,
+    )
+    def backend_plan_endpoint(request: SpatialPlanRequest) -> SpatialPlanResult:
+        try:
+            return lowerer.lower(request)
+        except SpatialLoweringInvalidIR as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"kind": "invalid_world_ir", "issues": exc.issues},
+            ) from exc
+
+    if enable_demo_intent:
+        @app.post(
+            "/v1/demo/interpret",
+            response_model=DemoInterpretResult,
+            response_model_exclude_none=True,
+        )
+        def demo_interpret_endpoint(
+            request: DemoInterpretRequest,
+        ) -> DemoInterpretResult:
+            return interpret_demo_prompt(request)
 
     @app.post(
         "/v1/compile",

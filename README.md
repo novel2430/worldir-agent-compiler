@@ -51,9 +51,16 @@ Server V0 是本地 sidecar HTTP 服务，按 `docs/server_v0/LLM_COMPILER_SERVE
 
 ```text
 POST /v1/compile
+POST /v1/backend/plan
 GET  /health
 GET  /info
 ```
+
+`/v1/backend/plan` performs deterministic World IR V2 → Godot ArtLab Global
+Spatial Plan V0 lowering. The offline dev server and experimental Future
+Policy/History contract are documented in
+`docs/BACKEND_SPATIAL_PLAN_V0.md`; they do not modify the formal World IR V2
+schema or World Catalog V1.
 
 准备配置并启动：
 
