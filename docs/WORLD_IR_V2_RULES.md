@@ -13,11 +13,12 @@ World IR V2 keeps the same four-Primitive shape:
 }
 ```
 
-The compiler now follows a closed capability path:
+The compiler now follows an open-input, closed-output capability path:
 
 ```text
 Natural language
-  -> Catalog-declared canonical type or alias
+  -> capability-aware semantic interpretation
+  -> best supported Catalog lowering
   -> finite backend-supported archetypes and objects
   -> Catalog-defined activation realization
   -> World IR V2
@@ -34,12 +35,21 @@ Source files:
 - `config/world_ir_v2_semantics.md`: lowering and edit policy;
 - `config/world_catalog_v1.json`: historical Catalog only.
 
-## 2. Closed-world rule
+## 2. Open input, closed output
 
-The Catalog is exhaustive. A concept is supported only when the phrase is a
-canonical type or an explicitly declared alias. There is no nearest-profile
-fallback. `desert`, `graveyard`, `town`, `village`, `swamp`, `field`, and an
-unsnowed pine forest produce an IR GAP when essential to the request.
+The Catalog is exhaustive for emitted types and compatibility, not for phrases
+the user may utter. Canonical names and aliases are high-confidence mappings.
+The LLM may also specialize an underspecified concept or compose supported
+objects when that preserves the user's operative visual, spatial, and functional
+intent. Every emitted type must still be canonical and pass deterministic
+Catalog validation.
+
+This is not an unrestricted nearest-profile fallback. Explicit subtype,
+identity, exclusion, compatibility, topology, and exact constraints remain hard.
+`desert`, a literal `graveyard`, `town`, `village`, `swamp`, `field`, and an
+unsnowed pine forest produce an IR GAP when their defining meaning is essential.
+An evocative request such as “墓地般的氛围” may instead use a restrained supported
+composition without claiming that unavailable tombstones or graves exist.
 
 Declared compound types are atomic semantic keys. `snow_forest` is not
 `forest + snow`; arbitrary new compound types remain illegal.
@@ -64,6 +74,9 @@ Important normalizations include:
 - `snowy forest`, `winter forest`, `雪森林` -> `snow_forest`;
 - `research facility`, `abandoned research base`, `研究基地` -> `research_base`.
 
+Generic input can also be concretized when it has no conflicting modifier. For
+example, `船` can lower to the only supported boat realization, `rowboat`.
+
 ### Network
 
 ```text
@@ -72,7 +85,8 @@ path
 
 `Network.type` is structurally a string. Catalog validation is the single source
 of truth for its allowed value. A path may cross Regions; the Backend changes its
-rendered surface by Region.
+rendered surface by Region. Generic Chinese `路` may lower to `path`; explicit
+`公路`, `高速公路`, `铁路`, or another incompatible subtype must not.
 
 ### Entity
 
@@ -112,7 +126,7 @@ owner Region profile.
 
 Every type has required `roles`. Primitive-specific optional keys are:
 
-- `aliases`: exact natural-language normalization hints;
+- `aliases`: exact high-confidence natural-language normalization hints;
 - `allowed_regions`: Region archetypes allowed to own an Entity/Distribution;
 - `default_realization`: contents materialized when a Region is activated.
 
@@ -134,6 +148,8 @@ canonical_type_for_alias(primitive, phrase)
 ```
 
 The alias helper performs normalized exact lookup only, not fuzzy NLP matching.
+That deterministic helper is a fast path; semantic passes may interpret broader
+input while remaining constrained to Catalog output.
 
 ## 5. Region default realization
 
@@ -231,8 +247,9 @@ type vocabularies, relation legality, exactly-one ownership, Region nesting,
 Translator, Editor, and Semantic Judge consume defaults as activation-time
 policy. Initial generation now starts with a small Expressibility gate so an
 unsupported initial concept returns `ir_gap` instead of exhausting invalid-type
-retries. Edit flow remains Router -> optional Planner -> Expressibility -> Editor
--> Validator -> Judge.
+retries. Expressibility must first propose a supported lowering and shares that
+analysis with Translator/Editor. Edit flow remains Router -> optional Planner ->
+Expressibility -> Editor -> Validator -> Judge.
 
 ## 10. Runtime and backend boundary
 
@@ -247,7 +264,13 @@ material, light, weather, species, mesh, or prototype fields.
 
 - `生成一片森林` -> declared alias `coastal_forest`, then its Catalog defaults,
   each with the required Region owner.
+- `森林里有一条南北向的路` -> generic `路` lowers to canonical `path` with
+  south-to-north topology.
+- `森林里有五艘船` -> generic `船` lowers to five compatible `rowboat` Entities;
+  an explicitly requested ferry or yacht would remain a gap.
+- `森林的树少一点点` -> move the existing qualitative density one supported
+  step down rather than demanding unsupported numeric precision.
 - `把这片森林变成雪森林` -> same Region ID/placement, compatibility migration,
   then snow defaults without duplicates.
-- `生成一个墓地` -> IR GAP because no canonical Region or alias exists; it is
-  not mapped to `research_base`.
+- `生成一个有墓碑和墓穴的墓地` -> IR GAP because its literal defining objects
+  are unavailable; it is not relabeled as `research_base`.

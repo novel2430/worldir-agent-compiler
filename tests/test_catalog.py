@@ -40,6 +40,24 @@ class WorldCatalogV2Tests(unittest.TestCase):
             self.catalog.canonical_type_for_alias("Region", "森林"),
             "coastal_forest",
         )
+        self.assertEqual(
+            self.catalog.canonical_type_for_alias("Network", "路"),
+            "path",
+        )
+        self.assertEqual(
+            self.catalog.canonical_type_for_alias("Entity", "船"),
+            "rowboat",
+        )
+        self.assertEqual(
+            self.catalog.canonical_type_for_alias("Entity", "舟"),
+            "rowboat",
+        )
+        self.assertIsNone(
+            self.catalog.canonical_type_for_alias("Network", "高速公路")
+        )
+        self.assertIsNone(
+            self.catalog.canonical_type_for_alias("Entity", "轮船")
+        )
         self.assertIsNone(
             self.catalog.canonical_type_for_alias("Region", "pine forest")
         )

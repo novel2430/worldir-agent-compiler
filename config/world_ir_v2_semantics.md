@@ -10,15 +10,19 @@ World IR V2 keeps exactly four Primitives: `Region`, `Network`, `Entity`, and
 `Distribution`. It is not a general ontology. The active Catalog is exhaustive:
 
 - canonical type values are the only legal semantic object types;
-- declared `aliases` are the only legal natural-language normalization hints;
+- declared `aliases` are machine-readable high-confidence normalization hints;
 - `allowed_regions` defines deterministic ownership compatibility;
 - Region `default_realization` defines activation-time semantic contents.
 
-Do not use ordinary world knowledge, visual similarity, or a "closest supported
-type" policy to extend this language. If an essential user concept has neither
-a canonical type nor a declared alias, report an IR GAP. In particular, do not
-map desert, graveyard, town, village, swamp, field, or medieval settlement to
-one of the supported environment profiles.
+The Catalog is exhaustive for compiler output, not for user input language.
+Canonical names and aliases provide high-confidence normalization, while the
+LLM may interpret broader, generic, indirect, or evocative wording and lower it
+to a restrained composition of supported capabilities. It must not extend the
+output language or use arbitrary visual similarity as a "closest type" policy.
+If an essential concept still cannot be preserved after best-effort supported
+lowering, report an IR GAP. In particular, do not claim to create a literal
+desert, graveyard, town, village, swamp, field, or medieval settlement merely by
+renaming one of the supported environment profiles.
 
 Use exact singular `snake_case` canonical types in IR. A compound `snake_case`
 type declared by the Catalog is an atomic semantic key. For example,
@@ -74,19 +78,32 @@ This is deterministic. Do not ask the Semantic Judge to excuse an incompatible
 pair. A `Network` needs no owner Region and may cross multiple Regions. A Region
 must never have an `inside` relation; Region nesting is unsupported.
 
-### 0.4 Alias normalization and IR GAP
+### 0.4 Open input and capability-grounded lowering
 
-Normalize only through an exact canonical value or an explicit Catalog alias.
-Case and surrounding whitespace may be ignored; semantic synonym guessing may
-not. Examples under the active Catalog include:
+Aliases are explicit, high-confidence normalization entries and may be matched
+without semantic deliberation. They are not an exhaustive whitelist of natural
+language phrases. Examples under the active Catalog include:
 
 - bare `forest` or `森林` -> `coastal_forest`;
 - `snowy forest` -> `snow_forest`;
 - `research facility` -> `research_base`.
 
-No declared mapping means IR GAP, not approximation. "A pine forest without
-snow" is not faithfully represented by `snow_forest`, whose snow identity is
-intrinsic, or by `coastal_forest`, whose complete profile has different meaning.
+When wording is not an alias, first distinguish essential constraints from
+elastic or underspecified language, then search for the smallest supported
+realization that preserves the operative visual, spatial, and functional intent:
+
+- a generic object may become a compatible supported subtype when no explicit
+  modifier contradicts it (`船` -> `rowboat`);
+- a generic connection through a forest may become `path` (`路` -> `path`);
+- evocative or functional intent may use several supported objects when every
+  addition has a clear realization role rather than being plausible decoration.
+
+This is semantic lowering, not permission to relabel anything. A requested
+ferry is not a rowboat, a paved highway is not a path, and "a pine forest without
+snow" is not faithfully represented by `snow_forest` or `coastal_forest` because
+the explicit subtype/environment identity conflicts with both profiles.
+
+Only essential residual meaning causes IR GAP. Missing alias text alone does not.
 
 ## 1. Primitive roles
 
@@ -159,6 +176,12 @@ the Compiler canonical fallback remains medium density. Catalog defaults already
 carry explicit amounts and are not changed by this fallback. Never backfill a
 pre-existing Distribution during an unrelated edit.
 
+Ordinary relative edits on an existing qualitative density use the nearest
+available step in the requested direction: high -> medium -> low for reductions,
+and low -> medium -> high for increases. Phrases such as "a little less" do not
+require unsupported numeric precision. A request beyond the enum boundary, or
+an explicit percentage/metric that cannot be represented, remains an IR GAP.
+
 `population.arrangement` is orthogonal to amount:
 
 - `uniform`: approximately even spacing;
@@ -195,9 +218,12 @@ edits. The only triggers are archetype creation, activation, or replacement.
 
 ## 8. IR GAP discipline
 
-A structurally legal encoding is insufficient if it changes essential meaning.
-Return an IR GAP when any essential concept, type, compatibility combination,
-metric distance, or spatial relation cannot be expressed by the active Catalog,
-World IR, and Runtime Binding contracts. Runtime Binding may supply one-shot
-`at`, `inside`, or `near` placement against an existing Runtime Fact, but it does
-not expand the Catalog or legalize an incompatible World IR owner.
+A structurally legal encoding is insufficient if it changes essential meaning,
+but IR GAP is a last-resort capability result rather than a lexical rejection.
+Before returning it, attempt generic-to-specific lowering, supported semantic
+composition, and qualitative-axis lowering. Return IR GAP when an essential
+identity, explicit subtype, compatibility combination, exact metric, or spatial
+relation still cannot be represented by the active Catalog, World IR, and
+Runtime Binding contracts. Runtime Binding may supply one-shot `at`, `inside`,
+or `near` placement against an existing Runtime Fact, but it does not expand the
+Catalog or legalize an incompatible World IR owner.

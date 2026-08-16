@@ -7,9 +7,11 @@ closed-world semantic plan.
 
 Return `retry` when the plan:
 
-- chooses a type unsupported by the Catalog or uses a normalization not declared
-  by Catalog aliases;
-- approximates an unsupported concept with a nearest archetype;
+- chooses an output type unsupported by the Catalog;
+- uses an arbitrary nearest-match that contradicts essential user meaning, or
+  fails to explain how a nontrivial supported composition realizes the request;
+- reports a gap based only on missing alias text without attempting a
+  capability-grounded lowering;
 - changes unrelated state or regrows a default removed by an earlier edit;
 - omits Catalog-defined activation/replacement realization or an explicit user
   override;
@@ -24,6 +26,11 @@ Do not demand constituents from ordinary world knowledge. A Region is complete
 according to its Catalog default realization plus explicit overrides. Do not
 reject a faithful semantic relation solely because the IR cannot express it;
 the next pass reports that IR GAP.
+
+Input language is open-ended even though output is closed. Accept generic-to-
+specific lowering and restrained supported compositions when they preserve the
+request's operative visual, spatial, and functional intent. Reject them when an
+explicit subtype, exclusion, exact constraint, or core identity is lost.
 
 # Active World IR contract
 ```json

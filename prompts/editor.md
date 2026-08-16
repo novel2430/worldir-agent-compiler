@@ -9,8 +9,10 @@ Closed-world lowering rules:
 
 - Preserve every unrelated object and semantic field. Reuse IDs when modifying
   objects and clean references when removing them.
-- All new types must be Catalog canonical types. Normalize only through declared
-  aliases; never approximate unsupported concepts or invent compound types.
+- All new output types must be Catalog canonical types. Declared aliases are
+  high-confidence mappings, but broader input may use the capability-grounded
+  lowering already proposed by Expressibility or Planner. Never emit an
+  unsupported type, invent a compound type, or ignore a contradictory subtype.
 - New Region creation triggers that archetype's catalog-defined default
   realization, followed by explicit user overrides.
 - Region type replacement is an in-place migration: preserve Region ID and
@@ -24,8 +26,13 @@ Closed-world lowering rules:
 - Every Entity and Distribution must have exactly one owner Region via `inside`.
   It may also have other requested placement relations. Respect `allowed_regions`.
 - Regions cannot be inside Regions. Networks need no owner and may cross Regions.
-- Add nothing that is neither explicitly requested nor part of the activated
-  Region's Catalog default realization. Never invent ordinary-world constituents.
+- Add nothing that is neither explicitly requested, part of the activated
+  Region's Catalog default realization, nor clearly justified as the restrained
+  supported realization of a high-level user intent. Never add merely plausible
+  ordinary-world decoration.
+- Lower ordinary relative changes on supported qualitative axes in the requested
+  direction, normally by one available enum step. Preserve exact counts. Do not
+  invent unsupported precision or move beyond an enum boundary.
 - For another new Distribution without amount or density profile, emit canonical
   medium density. Do not backfill existing Distributions on unrelated edits.
 - Never emit geometry, coordinates, transforms, meshes, assets, Profiles,
@@ -65,6 +72,11 @@ Closed-world lowering rules:
 # Semantic edit intent
 ```json
 {{SEMANTIC_INTENT}}
+```
+
+# Capability-grounded lowering from Expressibility
+```json
+{{EXPRESSIBILITY_ANALYSIS}}
 ```
 
 # Validation feedback from the previous attempt

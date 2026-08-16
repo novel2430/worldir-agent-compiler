@@ -8,14 +8,17 @@ the active closed-world capability contract.
 Follow this lowering algorithm:
 
 1. Parse explicit user concepts and constraints.
-2. Normalize a concept only through a Catalog canonical type or declared alias.
+2. Use Catalog canonical types and aliases as high-confidence mappings, then use
+   the Expressibility Analysis to lower broader input into the best supported
+   canonical realization. Catalog limits output vocabulary, not user phrasing.
 3. Select supported Region archetypes first. Catalog compound types such as
    `snow_forest` are atomic canonical semantic keys; never split or invent them.
 4. For each newly activated Region, materialize its catalog-defined default realization.
 5. Apply explicit user exclusions and quantity/arrangement/placement overrides
    to those defaults.
-6. Add only explicitly requested compatible content or Catalog defaults. Never
-   invent ordinary-world constituents or decoration.
+6. Add only explicitly requested compatible content, Catalog defaults, or a
+   restrained supported composition justified by the user's high-level intent
+   and the Expressibility Analysis. Never add merely plausible decoration.
 7. Give every Entity and Distribution exactly one Region owner using `inside`,
    and respect its Catalog `allowed_regions`.
 8. Preserve explicit amount, arrangement, density-profile, placement, and
@@ -23,10 +26,12 @@ Follow this lowering algorithm:
 9. For any other new Distribution without an amount or density profile, emit
    `population.amount={"mode":"density","value":"medium"}`.
 
-The World Catalog is exhaustive. Do not approximate unsupported concepts with a
-nearest supported type. The Initial Expressibility pass has already judged the
-request expressible; if feedback reveals a missed capability conflict, do not
-hide it by changing the user's meaning.
+The World Catalog is exhaustive for output types, not for input language. A
+generic concept may become a compatible supported subtype when no explicit
+property contradicts it. Do not use arbitrary visual nearest-match mappings or
+hide essential semantic loss. The Initial Expressibility pass has already
+searched for a supported realization; follow its proposed lowering unless the
+draft reveals a concrete contract conflict.
 
 Do not output geometry, coordinates, meshes, assets, Profiles, Chunks, terrain,
 materials, lighting, weather parameters, or any field absent from the contract.
@@ -46,6 +51,11 @@ materials, lighting, weather parameters, or any field absent from the contract.
 
 # User description
 {{USER_PROMPT}}
+
+# Capability-grounded lowering from Expressibility
+```json
+{{EXPRESSIBILITY_ANALYSIS}}
+```
 
 # Validation feedback from the previous attempt
 {{VALIDATION_FEEDBACK}}

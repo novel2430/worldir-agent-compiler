@@ -22,6 +22,8 @@ IR_GAP_CASES = {
     "initial_medieval_town_is_ir_gap",
     "initial_non_snow_pine_forest_gap",
     "add_rowboat_to_snow_forest_is_ir_gap",
+    "explicit_highway_is_ir_gap",
+    "explicit_ship_is_ir_gap",
 }
 
 
@@ -219,6 +221,44 @@ def check_live_case(case_id: str, state: Json | None, result: Any, spec: IRSpec)
         trees = find_type(result.ir, "distributions", "tree")
         if not trees or amount(trees[0]) != {"mode": "density", "value": "low"}:
             failures.append("tree density did not override to low")
+    elif case_id == "generic_road_lowers_to_path":
+        old_paths = len(find_type(state, "networks", "path"))
+        paths = find_type(result.ir, "networks", "path")
+        if len(paths) != old_paths + 1:
+            failures.append("generic 路 did not add exactly one canonical path")
+        elif not any(
+            item.get("topology", {}).get("from") == "south"
+            and item.get("topology", {}).get("to") == "north"
+            for item in paths
+        ):
+            failures.append("new path did not preserve south-to-north topology")
+    elif case_id in {
+        "generic_boat_lowers_to_rowboats",
+        "literary_boat_lowers_to_rowboat",
+    }:
+        expected_added = 5 if case_id == "generic_boat_lowers_to_rowboats" else 1
+        old_boats = len(find_type(state, "entities", "rowboat"))
+        boats = find_type(result.ir, "entities", "rowboat")
+        if len(boats) != old_boats + expected_added:
+            failures.append(
+                f"generic boat wording expected {expected_added} new rowboat "
+                f"Entities, got {len(boats) - old_boats}"
+            )
+        coastal_ids = {
+            item.get("id") for item in find_type(result.ir, "regions", "coastal_forest")
+        }
+        if any(inside_target(item) not in coastal_ids for item in boats):
+            failures.append("a lowered rowboat lacks a coastal_forest owner")
+    elif case_id == "slight_density_reduction_uses_qualitative_step":
+        coastal_ids = {
+            item.get("id") for item in find_type(result.ir, "regions", "coastal_forest")
+        }
+        trees = [
+            item for item in find_type(result.ir, "distributions", "tree")
+            if inside_target(item) in coastal_ids
+        ]
+        if not trees or amount(trees[0]) != {"mode": "density", "value": "medium"}:
+            failures.append("slight tree reduction did not lower high to medium")
     elif case_id == "replace_coastal_forest_with_snow_forest":
         old = next(item for item in state["regions"] if item["id"] == "coastal_forest")
         new = next(

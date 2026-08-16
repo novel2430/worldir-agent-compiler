@@ -196,6 +196,7 @@ class WorldIRWorkflow:
             prompt = self._render_ir_prompt(
                 "initial_translator",
                 USER_PROMPT=user_prompt,
+                EXPRESSIBILITY_ANALYSIS=pretty_json(express),
                 VALIDATION_FEEDBACK=feedback,
             )
             candidate = self._call_json(trace, "initial_translator", prompt, attempt)
@@ -339,6 +340,7 @@ class WorldIRWorkflow:
                 CURRENT_IR=pretty_json(current_ir),
                 USER_PROMPT=user_prompt,
                 SEMANTIC_INTENT=pretty_json(semantic_intent),
+                EXPRESSIBILITY_ANALYSIS=pretty_json(express),
                 VALIDATION_FEEDBACK=editor_feedback,
             )
             editor_output = self._call_json(trace, "editor", editor_prompt, attempt)

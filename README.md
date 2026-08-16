@@ -276,9 +276,9 @@ World IR V2 还通过：
 config/world_catalog_v2.json
 ```
 
-声明当前后端真正支持的 closed-world semantic contract。Catalog 是 Prompt 与确定性类型校验共享的唯一来源，并同时保存 canonical types、有限 aliases、`allowed_regions` compatibility 和 Region activation-time `default_realization`。语义 realization 不再依赖 ordinary-world knowledge。
+声明当前后端真正支持的 closed-output semantic contract。Catalog 是 Prompt 与确定性类型校验共享的唯一输出能力来源，并同时保存 canonical types、有限 aliases、`allowed_regions` compatibility 和 Region activation-time `default_realization`。用户输入仍然可以是开放、口语化或高层视觉意图；LLM 负责在不创造新 type 的前提下寻找最小、最贴切的 supported realization。
 
-当前 Region archetypes 只有 `coastal_forest`、`research_base`、`snow_forest`；Network 只有 `path`。没有 canonical type 或明确 alias 的概念返回 IR GAP，禁止 nearest-profile approximation。
+当前 Region archetypes 只有 `coastal_forest`、`research_base`、`snow_forest`；Network 只有 `path`。Alias 是高置信 normalization，而不是输入词汇白名单。Compiler 先尝试 generic-to-specific lowering、受支持内容组合和定性参数 lowering；只有核心语义仍无法保留时才返回 IR GAP。最终 IR type、ownership 和 compatibility 仍由 Catalog/Validator 严格限制。
 
 World IR 与 World Catalog 独立版本化；Server `/info` 分别暴露
 `world_ir_version` 与 `world_catalog_version`，Catalog vocabulary 不属于
@@ -307,7 +307,8 @@ prompts/*.md
 coastal_forest / research_base / snow_forest
 ```
 
-而没有 canonical `graveyard` 或明确 alias，正确结果是：
+并且没有墓碑、墓穴等能够保留其字面核心身份的 supported realization，
+在完成 capability-grounded lowering 尝试后，正确结果是：
 
 ```json
 {

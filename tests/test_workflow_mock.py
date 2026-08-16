@@ -27,12 +27,15 @@ class FakeLLM:
         return self.responses[node].pop(0)
 
 
-def expressible(value=True, unsupported=None):
-    return json.dumps({
+def expressible(value=True, unsupported=None, *, lowering=None, semantic_loss=None):
+    payload = {
         "expressible": value,
         "reason": "supported" if value else "outside closed-world capabilities",
+        "proposed_lowering": lowering or [],
+        "semantic_loss": semantic_loss or [],
         "unsupported": unsupported or [],
-    })
+    }
+    return json.dumps(payload)
 
 
 def judgment(verdict="pass", *, critique="", missing=None, unsupported=None):
@@ -172,6 +175,14 @@ class ClosedWorldWorkflowTests(unittest.TestCase):
             spec.catalog.canonical_type_for_alias("Region", "森林"),
             "coastal_forest",
         )
+        self.assertEqual(
+            spec.catalog.canonical_type_for_alias("Network", "路"),
+            "path",
+        )
+        self.assertEqual(
+            spec.catalog.canonical_type_for_alias("Entity", "船"),
+            "rowboat",
+        )
         self.assertIsNone(
             spec.catalog.canonical_type_for_alias("Region", "graveyard")
         )
@@ -196,12 +207,24 @@ class ClosedWorldWorkflowTests(unittest.TestCase):
             text = prompts.read(name).lower()
             self.assertIn("catalog", text, name)
             self.assertTrue(
-                "closed-world" in text or "closed world" in text,
+                "closed-world" in text
+                or "closed world" in text
+                or "closed-output" in text,
                 name,
             )
-        self.assertIn("declared alias", prompts.read("expressibility").lower())
+        expressibility = prompts.read("expressibility").lower()
+        self.assertIn("open-input, closed-output", expressibility)
+        self.assertIn("not as the exhaustive set", expressibility)
+        self.assertIn("proposed_lowering", expressibility)
         self.assertIn("allowed_regions", prompts.read("editor"))
-        self.assertIn("do not approximate", prompts.read("initial_translator").lower())
+        self.assertIn(
+            "catalog limits output vocabulary, not user phrasing",
+            prompts.read("initial_translator").lower(),
+        )
+        self.assertIn(
+            "alias is sufficient but not required",
+            prompts.read("semantic_judge").lower(),
+        )
 
     def test_initial_prompt_injects_catalog_defaults(self):
         candidate = archetype_world("coastal_forest")
@@ -219,6 +242,56 @@ class ClosedWorldWorkflowTests(unittest.TestCase):
         self.assertIn('"default_realization"', translator_prompt)
         self.assertIn('"coastal_forest"', translator_prompt)
         self.assertIn("catalog-defined default realization", translator_prompt)
+
+    def test_expressibility_lowering_is_shared_with_initial_translator(self):
+        candidate = archetype_world("coastal_forest")
+        lowering = [
+            "Interpret generic woods as the supported coastal_forest archetype."
+        ]
+        llm = FakeLLM({
+            "expressibility": [expressible(lowering=lowering)],
+            "initial_translator": [json.dumps(candidate)],
+            "semantic_judge": [judgment()],
+        })
+        result = workflow(llm).run("生成一片林地")
+        self.assertEqual(result.status, "ok")
+        translator_prompt = next(
+            prompt for node, prompt in zip(llm.calls, llm.prompts)
+            if node == "initial_translator"
+        )
+        self.assertIn("Capability-grounded lowering from Expressibility", translator_prompt)
+        self.assertIn(lowering[0], translator_prompt)
+
+    def test_expressibility_lowering_is_shared_with_editor(self):
+        current = archetype_world("coastal_forest")
+        candidate = copy.deepcopy(current)
+        candidate["networks"].append({
+            "id": "north_south_path",
+            "type": "path",
+            "topology": {"from": "south", "to": "north"},
+        })
+        draft = {
+            "world_ir": candidate,
+            "runtime_bindings": [],
+            "runtime_fact_ops": [],
+        }
+        lowering = [
+            "Lower generic 路 to canonical path with south-to-north topology."
+        ]
+        llm = FakeLLM({
+            "router": [json.dumps({"route": "bypass", "reason": "concrete"})],
+            "expressibility": [expressible(lowering=lowering)],
+            "editor": [json.dumps(draft)],
+            "semantic_judge": [judgment()],
+        })
+        result = workflow(llm).run("森林里有一条南北向的路", current)
+        self.assertEqual(result.status, "ok")
+        editor_prompt = next(
+            prompt for node, prompt in zip(llm.calls, llm.prompts)
+            if node == "editor"
+        )
+        self.assertIn("Capability-grounded lowering from Expressibility", editor_prompt)
+        self.assertIn(lowering[0], editor_prompt)
 
     def test_initial_normalization_and_default_realization(self):
         cases = (

@@ -120,13 +120,13 @@
     "Network": {
       "path": {
         "roles": ["transport_network"],
-        "aliases": ["trail", "footpath", "小路", "路径", "步道"]
+        "aliases": ["trail", "footpath", "路", "小路", "路径", "步道", "小径", "林间小路"]
       }
     },
     "Entity": {
       "rowboat": {
         "roles": ["vehicle", "hero_object"],
-        "aliases": ["row boat", "rowing boat", "划艇", "小划艇"],
+        "aliases": ["row boat", "rowing boat", "boat", "small boat", "船", "小船", "舟", "木舟", "划艇", "小划艇"],
         "allowed_regions": ["coastal_forest"]
       },
       "tent": {
